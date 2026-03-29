@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, render_template, current_app
 from app.db import get_connection, test_connection, _dsn_label
 from app.queries import (
     get_integration_status,
+    get_management_report,
     get_overall_kpis,
     get_region_summary,
     get_table_error_summary,
@@ -75,6 +76,15 @@ def api_table_errors_detail(table_name):
     except oracledb.Error:
         logger.exception("Failed to fetch table error details")
         return jsonify({"error": "Database error: unable to fetch table error details"}), 500
+
+
+@main_bp.route("/api/management-report")
+def api_management_report():
+    try:
+        return jsonify(get_management_report())
+    except oracledb.Error:
+        logger.exception("Failed to fetch management report")
+        return jsonify({"error": "Database error: unable to fetch management report"}), 500
 
 
 # ── Health check endpoint ──────────────────────────────────────────────

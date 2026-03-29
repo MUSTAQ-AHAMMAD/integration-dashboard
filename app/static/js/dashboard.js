@@ -393,6 +393,102 @@ function renderIntegrationTable(rows) {
   });
 }
 
+/* ── Management Report ────────────────────────────────────────────── */
+function formatReportDate(val) {
+  if (!val) return "";
+  var d = new Date(val);
+  if (isNaN(d.getTime())) return escapeHtml(String(val));
+  var day = d.getDate();
+  var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return day + "-" + months[d.getMonth()];
+}
+
+function buildReportTable(itype, rows, reportDate) {
+  var headerClass = "report-section-header-" + itype.toLowerCase();
+  var dateStr = reportDate || "";
+
+  var html = '<div class="report-section">';
+  html += '<div class="report-section-header ' + headerClass + '">';
+  html += escapeHtml(itype);
+  if (dateStr) {
+    html += '<span class="report-date">Date : ' + escapeHtml(dateStr) + '</span>';
+  }
+  html += '</div>';
+  html += '<div class="table-responsive">';
+  html += '<table class="report-table">';
+  html += '<thead><tr>';
+  html += '<th>Country</th>';
+  html += '<th>Integration completed Date</th>';
+  html += '<th>Integration current date (Running)</th>';
+  html += '<th>Integration running</th>';
+  html += '<th>Reason</th>';
+  html += '<th>Expected date to be up to date</th>';
+  html += '</tr></thead>';
+  html += '<tbody>';
+
+  if (rows.length === 0) {
+    html += '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">No data available</td></tr>';
+  } else {
+    rows.forEach(function(r) {
+      var running = (r.is_running || "").toUpperCase();
+      var runningClass = running === "YES" ? "report-running-yes" : "report-running-no";
+      var expected = escapeHtml(r.expected_date || "");
+      var expectedHtml = expected;
+      if (expected.toLowerCase() === "up to date") {
+        expectedHtml = '<span class="report-uptodate">' + expected + '</span>';
+      }
+      html += '<tr>';
+      html += '<td><strong>' + escapeHtml(r.country || "") + '</strong></td>';
+      html += '<td>' + formatReportDate(r.completed_date) + '</td>';
+      html += '<td>' + formatReportDate(r.current_date) + '</td>';
+      html += '<td><span class="' + runningClass + '">' + escapeHtml(running || "") + '</span></td>';
+      html += '<td>' + escapeHtml(r.reason || "") + '</td>';
+      html += '<td>' + expectedHtml + '</td>';
+      html += '</tr>';
+    });
+  }
+
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+async function refreshManagementReport() {
+  try {
+    var res = await fetch("/api/management-report");
+    if (!res.ok) {
+      var err = await res.json();
+      var container = document.getElementById("management-report-container");
+      container.innerHTML = '<div class="table-empty-state"><i class="bi bi-exclamation-triangle"></i>' + escapeHtml(err.error || "Database error") + '</div>';
+      return;
+    }
+    var data = await res.json();
+    var container = document.getElementById("management-report-container");
+
+    var now = new Date();
+    var dd = String(now.getDate()).padStart(2, "0");
+    var mm = String(now.getMonth() + 1).padStart(2, "0");
+    var yy = String(now.getFullYear()).slice(-2);
+    var reportDate = dd + "-" + mm + " " + yy;
+    var dateEl = document.getElementById("report-date");
+    if (dateEl) dateEl.textContent = "Date: " + reportDate;
+
+    var types = Object.keys(data);
+    if (types.length === 0) {
+      container.innerHTML = '<div class="table-empty-state"><i class="bi bi-inbox"></i>No management report data available</div>';
+      return;
+    }
+
+    var html = '<div class="p-4">';
+    types.forEach(function(itype) {
+      html += buildReportTable(itype, data[itype], reportDate);
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  } catch (e) {
+    showToast("Network error: unable to load management report", "error");
+  }
+}
+
 /* ── Connection Banner ────────────────────────────────────────────── */
 function showConnectionBanner(message) {
   var existing = document.getElementById("connection-banner");
@@ -446,6 +542,7 @@ async function refreshAll() {
       refreshBarChart(),
       refreshTableErrors(),
       refreshIntegrationStatus(),
+      refreshManagementReport(),
     ]);
   }
 

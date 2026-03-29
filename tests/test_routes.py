@@ -113,6 +113,52 @@ def test_api_table_errors_detail_invalid_table(mock_detail, client):
     assert resp.get_json() == []
 
 
+# ── API: /api/management-report ──────────────────────────────────────
+@patch("app.routes.get_management_report")
+def test_api_management_report(mock_report, client):
+    mock_report.return_value = {
+        "IBRAQ": [
+            {
+                "integration_type": "IBRAQ",
+                "country": "KSA",
+                "completed_date": "2026-02-11",
+                "current_date": "2026-02-12",
+                "is_running": "No",
+                "reason": "Waiting for data sync",
+                "expected_date": "30-Apr",
+            }
+        ],
+        "MATCH": [
+            {
+                "integration_type": "MATCH",
+                "country": "KSA",
+                "completed_date": "2026-03-14",
+                "current_date": "2026-03-15",
+                "is_running": "YES",
+                "reason": "",
+                "expected_date": "3-Apr",
+            }
+        ],
+    }
+    resp = client.get("/api/management-report")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "IBRAQ" in data
+    assert "MATCH" in data
+    assert len(data["IBRAQ"]) == 1
+    assert data["IBRAQ"][0]["country"] == "KSA"
+    assert data["MATCH"][0]["is_running"] == "YES"
+
+
+@patch("app.routes.get_management_report")
+def test_api_management_report_empty(mock_report, client):
+    """Management report returns empty dict when no data."""
+    mock_report.return_value = {}
+    resp = client.get("/api/management-report")
+    assert resp.status_code == 200
+    assert resp.get_json() == {}
+
+
 # ── Modern UI elements ────────────────────────────────────────────────
 def test_dashboard_contains_search_input(client):
     """The dashboard should have a search/filter input for integration status."""
@@ -147,6 +193,14 @@ def test_dashboard_contains_toast_container(client):
     resp = client.get("/")
     html = resp.data.decode()
     assert 'id="toast-container"' in html
+
+
+def test_dashboard_contains_management_report(client):
+    """The dashboard should have a management report section."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert 'id="management-report-container"' in html
+    assert "Management Report" in html
 
 
 def test_dashboard_contains_current_year(client):
@@ -214,6 +268,15 @@ def test_api_table_errors_returns_500_on_db_error(mock_table, client):
 def test_api_table_errors_detail_returns_500_on_db_error(mock_detail, client):
     """GET /api/table-errors/<name> should return 500 on DB failure."""
     resp = client.get("/api/table-errors/fusion_invoice_header")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+@patch("app.routes.get_management_report", side_effect=oracledb.Error("connection failed"))
+def test_api_management_report_returns_500_on_db_error(mock_report, client):
+    """GET /api/management-report should return 500 on DB failure."""
+    resp = client.get("/api/management-report")
     assert resp.status_code == 500
     data = resp.get_json()
     assert "error" in data

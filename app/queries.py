@@ -82,6 +82,27 @@ def get_region_summary():
     return execute_query(query)
 
 
+# ── Management Report ──────────────────────────────────────────────────
+def get_management_report():
+    """Return management report rows grouped by integration type.
+
+    Each row contains country-level progress for a given integration type
+    (e.g. IBRAQ, MATCH).
+    """
+    query = """
+        SELECT integration_type, country, completed_date, current_date,
+               is_running, reason, expected_date
+        FROM odoo_integration.integration_report
+        ORDER BY integration_type, country
+    """
+    rows = execute_query(query)
+    grouped = {}
+    for row in rows:
+        itype = row.get("integration_type", "UNKNOWN")
+        grouped.setdefault(itype, []).append(row)
+    return grouped
+
+
 # ── Overall KPIs ───────────────────────────────────────────────────────
 def get_overall_kpis():
     """Return high-level KPI numbers for the dashboard header."""
