@@ -212,6 +212,12 @@ body::before {
   50% { opacity: 0.6; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
 }
 
+/* ── KPI Strip (horizontal row) ──────────────────────────────────────── */
+.kpi-strip {
+  display: flex;
+  gap: 12px;
+}
+
 /* ── KPI Cards ───────────────────────────────────────────────────────── */
 .kpi-card {
   position: relative;
@@ -228,6 +234,8 @@ body::before {
               box-shadow 0.3s var(--transition-smooth),
               border-color 0.3s var(--transition-smooth);
   cursor: default;
+  flex: 1;
+  min-width: 0;
 }
 
 .kpi-card:hover {
@@ -710,6 +718,14 @@ body::before {
 /* ── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .navbar-custom { flex-direction: column; gap: 10px; text-align: center; }
+  .kpi-strip {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kpi-strip > .kpi-card {
+    flex: 0 0 auto;
+    min-width: 200px;
+  }
   .kpi-value { font-size: 1.5rem; }
   .search-bar { max-width: 100%; }
   .glass-card:hover { transform: none; }
