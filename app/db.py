@@ -13,9 +13,10 @@ _CONNECTION_CLOSED_PREFIX = "DPY-4011"
 
 # Retry settings for stale-connection recovery.  The pool is reset and
 # a fresh connection is attempted up to ``_MAX_RECONNECT_ATTEMPTS`` times
-# with a linearly increasing delay (attempt * ``_RECONNECT_DELAY`` seconds).
-_MAX_RECONNECT_ATTEMPTS = 3
-_RECONNECT_DELAY = 1  # base delay in seconds
+# with an exponentially increasing delay capped at ``_RECONNECT_MAX_DELAY``.
+_MAX_RECONNECT_ATTEMPTS = 5
+_RECONNECT_BASE_DELAY = 2   # base delay in seconds (doubles each attempt)
+_RECONNECT_MAX_DELAY = 32   # cap per-retry delay at this many seconds
 
 
 def _is_connection_closed_error(exc):
@@ -91,6 +92,7 @@ def _create_pool():
         "min": 1,
         "max": 5,
         "ping_interval": 0,
+        "timeout": 300,  # close idle connections after 5 minutes
     }
     if _app_config.get("mode", "").upper() == "SYSDBA":
         kwargs["mode"] = oracledb.AUTH_MODE_SYSDBA
@@ -109,7 +111,8 @@ def get_connection():
 
     If the attempt fails with a closed-connection error (DPY-4011)
     the pool is reset and retried up to ``_MAX_RECONNECT_ATTEMPTS`` times
-    with a linearly increasing delay.
+    with an exponentially increasing delay capped at
+    ``_RECONNECT_MAX_DELAY`` seconds.
     """
     last_exc = None
     for attempt in range(1 + _MAX_RECONNECT_ATTEMPTS):
@@ -124,7 +127,10 @@ def get_connection():
                 raise
             last_exc = exc
             if attempt < _MAX_RECONNECT_ATTEMPTS:
-                delay = _RECONNECT_DELAY * (attempt + 1)
+                delay = min(
+                    _RECONNECT_BASE_DELAY * (2 ** attempt),
+                    _RECONNECT_MAX_DELAY,
+                )
                 logger.warning(
                     "Stale pool detected (DPY-4011), resetting and retrying "
                     "(attempt %d/%d, backoff %ds)",

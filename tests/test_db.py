@@ -120,6 +120,7 @@ def test_create_pool_uses_dsn(mock_create, ):
     assert kwargs["password"] == "secret"
     assert kwargs["min"] == 1
     assert kwargs["max"] == 5
+    assert kwargs["timeout"] == 300
 
 
 @patch("app.db.oracledb.create_pool")
@@ -388,7 +389,7 @@ def test_get_connection_retries_on_dpy4011(mock_pool_fn, mock_sleep):
     conn = db_module.get_connection()
     assert conn is good_pool.acquire.return_value
     assert mock_pool_fn.call_count == 2
-    mock_sleep.assert_called_once_with(1)  # first retry: delay = 1 * 1
+    mock_sleep.assert_called_once_with(2)  # first retry: delay = min(2 * 2^0, 32) = 2
 
 
 @patch("app.db.time.sleep")
@@ -409,8 +410,8 @@ def test_get_connection_retries_multiple_times_on_dpy4011(mock_pool_fn, mock_sle
     conn = db_module.get_connection()
     assert conn is good_pool.acquire.return_value
     assert mock_pool_fn.call_count == 3
-    # Backoff delays: attempt 0 → sleep(1), attempt 1 → sleep(2)
-    assert mock_sleep.call_args_list == [call(1), call(2)]
+    # Exponential backoff: attempt 0 → sleep(2), attempt 1 → sleep(4)
+    assert mock_sleep.call_args_list == [call(2), call(4)]
 
 
 @patch("app.db.time.sleep")
@@ -430,6 +431,12 @@ def test_get_connection_raises_after_all_retries_exhausted(mock_pool_fn, mock_sl
     # 1 initial + _MAX_RECONNECT_ATTEMPTS retries
     assert mock_pool_fn.call_count == 1 + db_module._MAX_RECONNECT_ATTEMPTS
     assert mock_sleep.call_count == db_module._MAX_RECONNECT_ATTEMPTS
+    # Exponential backoff: 2, 4, 8, 16, 32 (capped at _RECONNECT_MAX_DELAY)
+    expected = [
+        call(min(db_module._RECONNECT_BASE_DELAY * (2 ** i), db_module._RECONNECT_MAX_DELAY))
+        for i in range(db_module._MAX_RECONNECT_ATTEMPTS)
+    ]
+    assert mock_sleep.call_args_list == expected
 
 
 @patch("app.db._create_pool")
