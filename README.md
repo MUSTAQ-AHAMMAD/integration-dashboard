@@ -1,20 +1,22 @@
 # Odoo Integration Dashboard
 
-Real-time analytics dashboard for monitoring Odoo integration pipelines across
-multiple regions. Built for management visibility into running/stopped/error
-states of all integration processes.
+Premium real-time analytics dashboard for monitoring Odoo integration pipelines
+across multiple regions, powered by **Oracle Database**. Built with a dark-theme
+command-center design for management visibility into running/stopped/error states
+of all integration processes.
 
 ## Features
 
-- **KPI Cards** – total, running, stopped and error counts at a glance
-- **Overall Status Doughnut Chart** – quick visual breakdown
+- **Animated KPI Cards** – total, running, stopped and error counts with glow effects
+- **Overall Status Doughnut Chart** – sleek donut with gradient colours
 - **Region-wise Stacked Bar Chart** – status per region (US, EU, APAC, …)
-- **Table Error Summary** – per-table status counts for all six fusion tables
-- **Integration Status Table** – detailed view with region, name, status, last
-  run time, error message and last-updated timestamp
-- **Auto-refresh** – configurable polling interval (default 30 s)
+- **Oracle Table Status Summary** – per-table status counts for all six fusion tables
+- **Integration Status Table** – detailed view with region, name, status badges,
+  last run time, error message and last-updated timestamp
+- **Dark-theme glassmorphism UI** – premium command-center aesthetic
+- **Auto-refresh with live indicator** – configurable polling interval (default 30 s)
 
-## Monitored Tables
+## Monitored Tables (Oracle)
 
 | Table | Purpose |
 |---|---|
@@ -36,8 +38,8 @@ git clone <repo-url> && cd integration-dashboard
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Configure the database connection
-cp .env.example .env          # then edit .env with your PostgreSQL credentials
+# 3. Configure the Oracle database connection
+cp .env.example .env          # then edit .env with your Oracle credentials
 
 # 4. Run the server
 python run.py                 # development
@@ -54,7 +56,7 @@ python demo.py
 ```
 
 Starts the dashboard with randomly generated data so you can preview the UI
-without a PostgreSQL connection.
+without an Oracle database connection.
 
 ## Running Tests
 
@@ -67,11 +69,11 @@ python -m pytest tests/ -v
 
 | Variable | Default | Description |
 |---|---|---|
-| `DB_HOST` | `localhost` | PostgreSQL host |
-| `DB_PORT` | `5432` | PostgreSQL port |
-| `DB_NAME` | `odoo_integration` | Database name |
-| `DB_USER` | `odoo` | Database user |
-| `DB_PASSWORD` | *(empty)* | Database password |
+| `DB_HOST` | `localhost` | Oracle database host |
+| `DB_PORT` | `1521` | Oracle listener port |
+| `DB_SERVICE_NAME` | `ORCL` | Oracle service name |
+| `DB_USER` | `odoo_integration` | Oracle database user |
+| `DB_PASSWORD` | *(empty)* | Oracle database password |
 | `FLASK_SECRET_KEY` | `dev-secret-key` | Flask session secret |
 | `FLASK_DEBUG` | `false` | Enable Flask debug mode |
 | `REFRESH_INTERVAL` | `30` | Dashboard auto-refresh interval (seconds) |
@@ -83,12 +85,12 @@ integration-dashboard/
 ├── app/
 │   ├── __init__.py          # Flask app factory
 │   ├── config.py            # Configuration from .env
-│   ├── db.py                # PostgreSQL connection helpers
-│   ├── queries.py           # SQL queries for each dashboard section
+│   ├── db.py                # Oracle database connection helpers
+│   ├── queries.py           # Oracle SQL queries for each dashboard section
 │   ├── routes.py            # Flask routes (page + JSON APIs)
 │   ├── static/
-│   │   ├── css/dashboard.css
-│   │   └── js/dashboard.js  # Front-end fetch + Chart.js logic
+│   │   ├── css/dashboard.css  # Premium dark-theme styles
+│   │   └── js/dashboard.js   # Front-end fetch + Chart.js logic
 │   └── templates/
 │       ├── base.html
 │       └── dashboard.html

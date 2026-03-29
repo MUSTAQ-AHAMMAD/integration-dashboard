@@ -1,4 +1,4 @@
-"""Data-access helpers that query the Odoo integration tables."""
+"""Data-access helpers that query the Odoo integration Oracle tables."""
 
 import logging
 
@@ -61,9 +61,9 @@ def get_table_errors(table_short_name, limit=100):
         FROM {full_name}
         WHERE LOWER(status) IN ('error', 'failed', 'failure')
         ORDER BY created_at DESC
-        LIMIT %s
+        FETCH FIRST :row_limit ROWS ONLY
     """  # noqa: S608
-    return execute_query(query, (limit,))
+    return execute_query(query, {"row_limit": limit})
 
 
 # ── Region-wise aggregation ────────────────────────────────────────────

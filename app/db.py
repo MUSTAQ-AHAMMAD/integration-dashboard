@@ -1,7 +1,6 @@
 import logging
 
-import psycopg2
-import psycopg2.extras
+import oracledb
 
 logger = logging.getLogger(__name__)
 
@@ -9,22 +8,31 @@ _app_config = None
 
 
 def init_db(app):
-    """Store app config for later database connections."""
+    """Store app config for later Oracle database connections."""
     global _app_config
     _app_config = {
         "host": app.config["DB_HOST"],
-        "port": app.config["DB_PORT"],
-        "dbname": app.config["DB_NAME"],
+        "port": int(app.config["DB_PORT"]),
+        "service_name": app.config["DB_SERVICE_NAME"],
         "user": app.config["DB_USER"],
         "password": app.config["DB_PASSWORD"],
     }
 
 
 def get_connection():
-    """Create and return a new database connection."""
+    """Create and return a new Oracle database connection."""
     if _app_config is None:
         raise RuntimeError("Database not initialised. Call init_db(app) first.")
-    return psycopg2.connect(**_app_config)
+    dsn = oracledb.makedsn(
+        _app_config["host"],
+        _app_config["port"],
+        service_name=_app_config["service_name"],
+    )
+    return oracledb.connect(
+        user=_app_config["user"],
+        password=_app_config["password"],
+        dsn=dsn,
+    )
 
 
 def execute_query(query, params=None):
@@ -32,10 +40,14 @@ def execute_query(query, params=None):
     conn = None
     try:
         conn = get_connection()
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(query, params)
-            return [dict(row) for row in cur.fetchall()]
-    except psycopg2.Error:
+        cursor = conn.cursor()
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        columns = [col[0].lower() for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    except oracledb.Error:
         logger.exception("Database query failed")
         return []
     finally:

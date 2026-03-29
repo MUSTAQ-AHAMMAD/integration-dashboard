@@ -1,111 +1,220 @@
-/* ── Dashboard real-time logic ────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   Integration Command Center – Premium Dashboard Logic
+   ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
 const REFRESH_MS = (window.REFRESH_INTERVAL || 30) * 1000;
 
-// Chart instances (created once, updated on each refresh)
+/* Chart instances (created once, updated on each refresh) */
 let pieChart = null;
 let barChart = null;
 
-// ── Helpers ─────────────────────────────────────────────────────────
+/* ── Dark-theme Chart.js defaults ─────────────────────────────────── */
+Chart.defaults.color = "#94a3b8";
+Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+
+/* ── Helpers ──────────────────────────────────────────────────────── */
 function statusBadge(status) {
-  const s = (status || "unknown").toLowerCase();
-  const cls = "badge badge-" + s;
-  return '<span class="badge ' + cls + '">' + escapeHtml(status) + "</span>";
+  var s = (status || "unknown").toLowerCase();
+  return '<span class="status-badge status-badge-' + s + '">' + escapeHtml(status) + "</span>";
+}
+
+function tablePill(status, count) {
+  var s = (status || "unknown").toLowerCase();
+  return '<span class="table-pill table-pill-' + s + '">' +
+    escapeHtml(status) + ": " + count + "</span>";
 }
 
 function escapeHtml(text) {
   if (text === null || text === undefined) return "";
-  const d = document.createElement("div");
+  var d = document.createElement("div");
   d.appendChild(document.createTextNode(String(text)));
   return d.innerHTML;
 }
 
 function formatDate(val) {
-  if (!val) return "–";
-  const d = new Date(val);
+  if (!val) return '<span style="color:#475569">&ndash;</span>';
+  var d = new Date(val);
   if (isNaN(d.getTime())) return escapeHtml(String(val));
   return d.toLocaleString();
 }
 
-// ── KPI Cards ───────────────────────────────────────────────────────
+/* Animate a number counting up */
+function animateValue(el, target) {
+  var current = parseInt(el.textContent, 10);
+  if (isNaN(current)) current = 0;
+  if (current === target) return;
+  var diff = target - current;
+  var steps = Math.min(Math.abs(diff), 20);
+  var stepMs = 300 / steps;
+  var i = 0;
+  function tick() {
+    i++;
+    el.textContent = Math.round(current + (diff * i) / steps);
+    if (i < steps) setTimeout(tick, stepMs);
+  }
+  tick();
+}
+
+/* ── KPI Cards ───────────────────────────────────────────────────── */
 async function refreshKPIs() {
   try {
-    const res = await fetch("/api/kpis");
-    const data = await res.json();
-    document.getElementById("kpi-total").textContent = data.total ?? "–";
-    document.getElementById("kpi-running").textContent = data.running ?? "–";
-    document.getElementById("kpi-stopped").textContent = data.stopped ?? "–";
-    document.getElementById("kpi-error").textContent = data.error ?? "–";
-  } catch {
+    var res = await fetch("/api/kpis");
+    var data = await res.json();
+    animateValue(document.getElementById("kpi-total"), data.total ?? 0);
+    animateValue(document.getElementById("kpi-running"), data.running ?? 0);
+    animateValue(document.getElementById("kpi-stopped"), data.stopped ?? 0);
+    animateValue(document.getElementById("kpi-error"), data.error ?? 0);
+  } catch (e) {
     /* network error – keep previous values */
   }
 }
 
-// ── Pie Chart (Overall Status) ──────────────────────────────────────
+/* ── Pie / Doughnut Chart (Overall Status) ───────────────────────── */
 async function refreshPieChart() {
   try {
-    const res = await fetch("/api/kpis");
-    const data = await res.json();
+    var res = await fetch("/api/kpis");
+    var data = await res.json();
 
-    const labels = ["Running", "Stopped", "Error"];
-    const values = [data.running || 0, data.stopped || 0, data.error || 0];
-    const colors = ["#198754", "#ffc107", "#dc3545"];
+    var labels = ["Running", "Stopped", "Error"];
+    var values = [data.running || 0, data.stopped || 0, data.error || 0];
+    var colors = ["#10b981", "#f59e0b", "#ef4444"];
+    var hoverColors = ["#34d399", "#fbbf24", "#f87171"];
 
     if (!pieChart) {
-      const ctx = document.getElementById("statusPieChart").getContext("2d");
+      var ctx = document.getElementById("statusPieChart").getContext("2d");
       pieChart = new Chart(ctx, {
         type: "doughnut",
         data: {
           labels: labels,
-          datasets: [{ data: values, backgroundColor: colors }],
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            hoverBackgroundColor: hoverColors,
+            borderWidth: 0,
+            hoverOffset: 8,
+          }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { position: "bottom" } },
+          cutout: "72%",
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                padding: 20,
+                usePointStyle: true,
+                pointStyleWidth: 12,
+                font: { size: 12, weight: "500" },
+              },
+            },
+            tooltip: {
+              backgroundColor: "rgba(17, 24, 39, 0.95)",
+              titleColor: "#f1f5f9",
+              bodyColor: "#94a3b8",
+              borderColor: "rgba(255,255,255,0.1)",
+              borderWidth: 1,
+              cornerRadius: 10,
+              padding: 14,
+              displayColors: true,
+              boxPadding: 6,
+            },
+          },
         },
       });
     } else {
       pieChart.data.datasets[0].data = values;
-      pieChart.update();
+      pieChart.update("none");
     }
-  } catch {
+  } catch (e) {
     /* keep chart as-is */
   }
 }
 
-// ── Bar Chart (Region-wise) ─────────────────────────────────────────
+/* ── Bar Chart (Region-wise) ─────────────────────────────────────── */
 async function refreshBarChart() {
   try {
-    const res = await fetch("/api/region-summary");
-    const rows = await res.json();
+    var res = await fetch("/api/region-summary");
+    var rows = await res.json();
 
-    const labels = rows.map((r) => r.region || "Unknown");
-    const running = rows.map((r) => r.running || 0);
-    const stopped = rows.map((r) => r.stopped || 0);
-    const errors = rows.map((r) => r.error || 0);
+    var labels = rows.map(function(r) { return r.region || "Unknown"; });
+    var running = rows.map(function(r) { return r.running || 0; });
+    var stopped = rows.map(function(r) { return r.stopped || 0; });
+    var errors = rows.map(function(r) { return r.error || 0; });
 
     if (!barChart) {
-      const ctx = document.getElementById("regionBarChart").getContext("2d");
+      var ctx = document.getElementById("regionBarChart").getContext("2d");
       barChart = new Chart(ctx, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Running", data: running, backgroundColor: "#198754" },
-            { label: "Stopped", data: stopped, backgroundColor: "#ffc107" },
-            { label: "Error", data: errors, backgroundColor: "#dc3545" },
+            {
+              label: "Running",
+              data: running,
+              backgroundColor: "rgba(16, 185, 129, 0.75)",
+              hoverBackgroundColor: "#10b981",
+              borderRadius: 4,
+              borderSkipped: false,
+            },
+            {
+              label: "Stopped",
+              data: stopped,
+              backgroundColor: "rgba(245, 158, 11, 0.75)",
+              hoverBackgroundColor: "#f59e0b",
+              borderRadius: 4,
+              borderSkipped: false,
+            },
+            {
+              label: "Error",
+              data: errors,
+              backgroundColor: "rgba(239, 68, 68, 0.75)",
+              hoverBackgroundColor: "#ef4444",
+              borderRadius: 4,
+              borderSkipped: false,
+            },
           ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           scales: {
-            x: { stacked: true },
-            y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } },
+            x: {
+              stacked: true,
+              grid: { display: false },
+              ticks: { font: { size: 12, weight: "500" } },
+            },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              ticks: { stepSize: 1, font: { size: 11 } },
+              grid: { color: "rgba(255,255,255,0.04)" },
+            },
           },
-          plugins: { legend: { position: "bottom" } },
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                padding: 20,
+                usePointStyle: true,
+                pointStyleWidth: 12,
+                font: { size: 12, weight: "500" },
+              },
+            },
+            tooltip: {
+              backgroundColor: "rgba(17, 24, 39, 0.95)",
+              titleColor: "#f1f5f9",
+              bodyColor: "#94a3b8",
+              borderColor: "rgba(255,255,255,0.1)",
+              borderWidth: 1,
+              cornerRadius: 10,
+              padding: 14,
+              displayColors: true,
+              boxPadding: 6,
+            },
+          },
         },
       });
     } else {
@@ -113,93 +222,72 @@ async function refreshBarChart() {
       barChart.data.datasets[0].data = running;
       barChart.data.datasets[1].data = stopped;
       barChart.data.datasets[2].data = errors;
-      barChart.update();
+      barChart.update("none");
     }
-  } catch {
+  } catch (e) {
     /* keep chart as-is */
   }
 }
 
-// ── Table Error Summary ─────────────────────────────────────────────
+/* ── Table Error Summary ─────────────────────────────────────────── */
 async function refreshTableErrors() {
   try {
-    const res = await fetch("/api/table-errors");
-    const tables = await res.json();
-    const tbody = document.querySelector("#table-error-summary tbody");
+    var res = await fetch("/api/table-errors");
+    var tables = await res.json();
+    var tbody = document.querySelector("#table-error-summary tbody");
     tbody.innerHTML = "";
 
-    tables.forEach((t) => {
-      const tr = document.createElement("tr");
-      const badges = t.status_counts
-        .map(
-          (sc) =>
-            '<span class="badge badge-' +
-            escapeHtml((sc.status || "unknown").toLowerCase()) +
-            ' me-1">' +
-            escapeHtml(sc.status) +
-            ": " +
-            sc.count +
-            "</span>"
-        )
+    tables.forEach(function(t) {
+      var tr = document.createElement("tr");
+      var pills = t.status_counts
+        .map(function(sc) { return tablePill(sc.status, sc.count); })
         .join("");
       tr.innerHTML =
-        "<td><strong>" +
-        escapeHtml(t.table) +
-        "</strong></td><td>" +
-        (badges || '<span class="text-muted">No data</span>') +
-        "</td>";
+        '<td><span class="table-name">' + escapeHtml(t.table) + "</span></td>" +
+        "<td>" + (pills || '<span style="color:#475569">No data</span>') + "</td>";
       tbody.appendChild(tr);
     });
-  } catch {
+  } catch (e) {
     /* retain previous data */
   }
 }
 
-// ── Integration Status Detail ───────────────────────────────────────
+/* ── Integration Status Detail ───────────────────────────────────── */
 async function refreshIntegrationStatus() {
   try {
-    const res = await fetch("/api/integration-status");
-    const rows = await res.json();
+    var res = await fetch("/api/integration-status");
+    var rows = await res.json();
 
     document.getElementById("status-count").textContent = rows.length + " integrations";
 
-    const tbody = document.querySelector("#integration-status-table tbody");
+    var tbody = document.querySelector("#integration-status-table tbody");
     tbody.innerHTML = "";
 
-    rows.forEach((r) => {
-      const tr = document.createElement("tr");
+    rows.forEach(function(r) {
+      var tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" +
-        escapeHtml(r.region) +
-        "</td>" +
-        "<td>" +
-        escapeHtml(r.integration_name) +
-        "</td>" +
-        "<td>" +
-        statusBadge(r.status) +
-        "</td>" +
-        "<td>" +
-        formatDate(r.last_run_time) +
-        "</td>" +
+        "<td>" + escapeHtml(r.region) + "</td>" +
+        "<td><strong>" + escapeHtml(r.integration_name) + "</strong></td>" +
+        "<td>" + statusBadge(r.status) + "</td>" +
+        "<td>" + formatDate(r.last_run_time) + "</td>" +
         '<td class="error-message-cell" title="' +
-        escapeHtml(r.error_message) +
-        '">' +
-        escapeHtml(r.error_message || "–") +
+          escapeHtml(r.error_message) + '">' +
+          escapeHtml(r.error_message || "") +
+          (!r.error_message ? '<span style="color:#475569">&ndash;</span>' : "") +
         "</td>" +
-        "<td>" +
-        formatDate(r.updated_at) +
-        "</td>";
+        "<td>" + formatDate(r.updated_at) + "</td>";
       tbody.appendChild(tr);
     });
-  } catch {
+  } catch (e) {
     /* retain previous data */
   }
 }
 
-// ── Orchestrator ────────────────────────────────────────────────────
+/* ── Orchestrator ────────────────────────────────────────────────── */
 async function refreshAll() {
-  document.getElementById("last-updated").textContent = "Refreshing…";
-  document.getElementById("last-updated").classList.add("refreshing");
+  var el = document.getElementById("last-updated");
+  el.textContent = "Refreshing\u2026";
+  el.classList.add("refreshing");
 
   await Promise.all([
     refreshKPIs(),
@@ -209,13 +297,12 @@ async function refreshAll() {
     refreshIntegrationStatus(),
   ]);
 
-  document.getElementById("last-updated").textContent =
-    "Last updated: " + new Date().toLocaleTimeString();
-  document.getElementById("last-updated").classList.remove("refreshing");
+  el.textContent = "Last updated: " + new Date().toLocaleTimeString();
+  el.classList.remove("refreshing");
 }
 
-// Run on load, then auto-refresh
-document.addEventListener("DOMContentLoaded", () => {
+/* Run on load, then auto-refresh */
+document.addEventListener("DOMContentLoaded", function() {
   refreshAll();
   setInterval(refreshAll, REFRESH_MS);
 });
