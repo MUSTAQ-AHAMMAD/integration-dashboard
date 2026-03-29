@@ -156,3 +156,17 @@ def test_dashboard_contains_current_year(client):
     html = resp.data.decode()
     current_year = str(datetime.datetime.now(datetime.timezone.utc).year)
     assert current_year in html
+
+
+# ── Database configuration ────────────────────────────────────────────
+def test_db_config_includes_mode(app):
+    """The app config should include DB_MODE for SYSDBA support."""
+    assert app.config["DB_MODE"] == "SYSDBA"
+
+
+def test_db_init_stores_mode(app):
+    """init_db should store the DB_MODE in the connection config."""
+    from app.db import _app_config
+
+    assert _app_config is not None
+    assert _app_config["mode"] == "SYSDBA"

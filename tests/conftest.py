@@ -16,6 +16,7 @@ def app():
         "DB_SERVICE_NAME": "ORCL",
         "DB_USER": "test_user",
         "DB_PASSWORD": "test_pass",
+        "DB_MODE": "SYSDBA",
         "REFRESH_INTERVAL": 10,
     }
     return create_app(config=test_config)
