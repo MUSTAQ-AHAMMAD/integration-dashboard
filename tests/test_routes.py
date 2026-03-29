@@ -220,18 +220,19 @@ def test_api_table_errors_detail_returns_500_on_db_error(mock_detail, client):
 
 
 # ── Health check endpoint ─────────────────────────────────────────────
-@patch("app.routes.get_connection")
-def test_api_health_ok(mock_conn, client):
+@patch("app.routes.test_connection", return_value=True)
+def test_api_health_ok(mock_test, client):
     """GET /api/health should return 200 when DB is reachable."""
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["status"] == "ok"
     assert data["database"] == "connected"
+    assert "target" in data
 
 
-@patch("app.routes.get_connection", side_effect=oracledb.Error("connection refused"))
-def test_api_health_db_error(mock_conn, client):
+@patch("app.routes.test_connection", side_effect=oracledb.Error("connection refused"))
+def test_api_health_db_error(mock_test, client):
     """GET /api/health should return 500 when DB is unreachable."""
     resp = client.get("/api/health")
     assert resp.status_code == 500
@@ -239,3 +240,4 @@ def test_api_health_db_error(mock_conn, client):
     assert data["status"] == "error"
     assert data["database"] == "disconnected"
     assert "detail" in data
+    assert "target" in data

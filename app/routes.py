@@ -6,7 +6,7 @@ import logging
 import oracledb
 from flask import Blueprint, jsonify, render_template, current_app
 
-from app.db import get_connection
+from app.db import get_connection, test_connection, _dsn_label
 from app.queries import (
     get_integration_status,
     get_overall_kpis,
@@ -80,11 +80,19 @@ def api_table_errors_detail(table_name):
 # ── Health check endpoint ──────────────────────────────────────────────
 @main_bp.route("/api/health")
 def api_health():
-    """Check database connectivity and return status."""
+    """Check database connectivity by running a real query."""
     try:
-        conn = get_connection()
-        conn.close()
-        return jsonify({"status": "ok", "database": "connected"})
+        test_connection()
+        return jsonify({
+            "status": "ok",
+            "database": "connected",
+            "target": _dsn_label(),
+        })
     except Exception as exc:
         logger.exception("Health check failed")
-        return jsonify({"status": "error", "database": "disconnected", "detail": str(exc)}), 500
+        return jsonify({
+            "status": "error",
+            "database": "disconnected",
+            "target": _dsn_label(),
+            "detail": str(exc),
+        }), 500
