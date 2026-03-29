@@ -1,4 +1,5 @@
 import logging
+import time
 
 import oracledb
 
@@ -9,6 +10,12 @@ _pool = None
 
 # DPY-4011 is raised when the database or network closed the connection.
 _CONNECTION_CLOSED_PREFIX = "DPY-4011"
+
+# Retry settings for stale-connection recovery.  The pool is reset and
+# a fresh connection is attempted up to ``_MAX_RECONNECT_ATTEMPTS`` times
+# with a linearly increasing delay (attempt * ``_RECONNECT_DELAY`` seconds).
+_MAX_RECONNECT_ATTEMPTS = 3
+_RECONNECT_DELAY = 1  # base delay in seconds
 
 
 def _is_connection_closed_error(exc):
@@ -100,23 +107,37 @@ def _create_pool():
 def get_connection():
     """Acquire a connection from the pool.
 
-    If the first attempt fails with a closed-connection error (DPY-4011)
-    the pool is reset and a single retry is made.
+    If the attempt fails with a closed-connection error (DPY-4011)
+    the pool is reset and retried up to ``_MAX_RECONNECT_ATTEMPTS`` times
+    with a linearly increasing delay.
     """
-    try:
-        pool = _create_pool()
-        return pool.acquire()
-    except oracledb.Error as exc:
-        if _is_connection_closed_error(exc):
-            logger.warning("Stale pool detected (DPY-4011), resetting and retrying")
-            _reset_pool()
+    last_exc = None
+    for attempt in range(1 + _MAX_RECONNECT_ATTEMPTS):
+        try:
             pool = _create_pool()
             return pool.acquire()
-        else:
-            logger.exception(
-                "Failed to acquire connection from pool for %s", _dsn_label()
-            )
-            raise
+        except oracledb.Error as exc:
+            if not _is_connection_closed_error(exc):
+                logger.exception(
+                    "Failed to acquire connection from pool for %s", _dsn_label()
+                )
+                raise
+            last_exc = exc
+            if attempt < _MAX_RECONNECT_ATTEMPTS:
+                delay = _RECONNECT_DELAY * (attempt + 1)
+                logger.warning(
+                    "Stale pool detected (DPY-4011), resetting and retrying "
+                    "(attempt %d/%d, backoff %ds)",
+                    attempt + 1, _MAX_RECONNECT_ATTEMPTS, delay,
+                )
+                _reset_pool()
+                time.sleep(delay)
+            else:
+                logger.error(
+                    "All %d reconnect attempts exhausted for %s",
+                    _MAX_RECONNECT_ATTEMPTS, _dsn_label(),
+                )
+    raise last_exc
 
 
 def _run_query(conn, query, params):
@@ -166,9 +187,27 @@ def test_connection():
     """Verify connectivity by executing ``SELECT 1 FROM DUAL``.
 
     Returns ``True`` on success; raises on failure.
+    If a DPY-4011 error occurs during the query the pool is reset and a
+    single retry is made with a fresh connection.
     """
     conn = None
     try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM DUAL")
+        cursor.fetchone()
+        return True
+    except oracledb.Error as exc:
+        if not _is_connection_closed_error(exc):
+            raise
+        logger.warning("Connection lost during health check (DPY-4011), retrying")
+        if conn is not None:
+            try:
+                conn.close()
+            except oracledb.Error:
+                pass
+            conn = None
+        _reset_pool()
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM DUAL")
