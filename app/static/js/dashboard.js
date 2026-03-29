@@ -20,6 +20,10 @@ Chart.defaults.color = "#94a3b8";
 Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
 Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
 
+/* Respect prefers-reduced-motion for chart animations */
+var prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var chartAnimationDuration = prefersReducedMotion ? 0 : 800;
+
 /* ── Helpers ──────────────────────────────────────────────────────── */
 function statusBadge(status) {
   var s = (status || "unknown").toLowerCase();
@@ -145,7 +149,7 @@ async function refreshPieChart() {
           responsive: true,
           maintainAspectRatio: false,
           cutout: "72%",
-          animation: { animateRotate: true, animateScale: true, duration: 800 },
+          animation: { animateRotate: true, animateScale: true, duration: chartAnimationDuration },
           plugins: {
             legend: {
               position: "bottom",
@@ -228,7 +232,7 @@ async function refreshBarChart() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          animation: { duration: 800, easing: "easeOutQuart" },
+          animation: { duration: chartAnimationDuration, easing: "easeOutQuart" },
           scales: {
             x: {
               stacked: true,

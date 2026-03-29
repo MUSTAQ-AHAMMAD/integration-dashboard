@@ -613,7 +613,7 @@ body::before {
   text-overflow: ellipsis;
   color: var(--text-muted);
   font-size: 0.82rem;
-  cursor: default;
+  cursor: help;
   transition: color 0.2s;
 }
 
@@ -722,4 +722,14 @@ body::before {
   .search-bar { max-width: 100%; }
   .glass-card:hover { transform: none; }
   .kpi-card:hover { transform: translateY(-2px); }
+}
+
+/* ── Reduced Motion ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-in { opacity: 1; }
 }
