@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Top Navbar -->
+<nav class="navbar-custom">
+  <div class="d-flex align-items-center">
+    <div class="navbar-logo">
+      <i class="bi bi-diagram-3-fill"></i>
+    </div>
+    <div>
+      <h1 class="navbar-title">Integration Command Center</h1>
+      <p class="navbar-subtitle">Odoo &middot; Oracle Real-Time Analytics</p>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <span class="live-indicator">
+      <span class="live-dot"></span> LIVE
+    </span>
+    <span class="text-light opacity-75 small" id="last-updated">Loading&hellip;</span>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- KPI Cards -->
+  <div class="row g-4 mb-4" id="kpi-cards">
+    <div class="col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-total">
+        <div class="kpi-icon">
+          <i class="bi bi-grid-3x3-gap-fill"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Total Integrations</span>
+          <span class="kpi-value" id="kpi-total">&ndash;</span>
+        </div>
+        <div class="kpi-glow"></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-running">
+        <div class="kpi-icon">
+          <i class="bi bi-play-circle-fill"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Running</span>
+          <span class="kpi-value" id="kpi-running">&ndash;</span>
+        </div>
+        <div class="kpi-glow"></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-stopped">
+        <div class="kpi-icon">
+          <i class="bi bi-pause-circle-fill"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Stopped</span>
+          <span class="kpi-value" id="kpi-stopped">&ndash;</span>
+        </div>
+        <div class="kpi-glow"></div>
+      </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+      <div class="kpi-card kpi-error">
+        <div class="kpi-icon">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+        <div class="kpi-content">
+          <span class="kpi-label">Errors</span>
+          <span class="kpi-value" id="kpi-error">&ndash;</span>
+        </div>
+        <div class="kpi-glow"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-5">
+      <div class="glass-card h-100">
+        <div class="glass-card-header">
+          <i class="bi bi-pie-chart-fill me-2"></i>Overall Status Distribution
+        </div>
+        <div class="glass-card-body d-flex align-items-center justify-content-center">
+          <canvas id="statusPieChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="glass-card h-100">
+        <div class="glass-card-header">
+          <i class="bi bi-bar-chart-fill me-2"></i>Region-wise Integration Status
+        </div>
+        <div class="glass-card-body">
+          <canvas id="regionBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Error Summary -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header">
+          <i class="bi bi-database-fill-gear me-2"></i>Oracle Table Status Summary
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="table-error-summary">
+              <thead>
+                <tr>
+                  <th>Table Name</th>
+                  <th>Status Breakdown</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Integration Status Detail Table -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-list-check me-2"></i>Integration Running Status</span>
+          <span class="header-badge" id="status-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="integration-status-table">
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>Integration</th>
+                  <th>Status</th>
+                  <th>Last Run</th>
+                  <th>Error Message</th>
+                  <th>Updated At</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- store refresh interval from server config -->
+<script>window.REFRESH_INTERVAL = {{ refresh_interval }};</script>
+{% endblock %}
