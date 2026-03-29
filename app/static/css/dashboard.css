@@ -1,0 +1,78 @@
+/* ── General ─────────────────────────────────────────────────────── */
+body {
+  background: #f0f2f5;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.navbar-brand {
+  font-size: 1.2rem;
+  letter-spacing: 0.5px;
+}
+
+/* ── KPI Cards ───────────────────────────────────────────────────── */
+.kpi-card {
+  transition: box-shadow 0.2s;
+}
+.kpi-card:hover {
+  box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.12);
+}
+
+/* ── Status badges ───────────────────────────────────────────────── */
+.badge-running {
+  background-color: #198754;
+  color: #fff;
+}
+.badge-stopped {
+  background-color: #ffc107;
+  color: #212529;
+}
+.badge-error,
+.badge-failed,
+.badge-failure {
+  background-color: #dc3545;
+  color: #fff;
+}
+.badge-success,
+.badge-completed {
+  background-color: #198754;
+  color: #fff;
+}
+.badge-pending,
+.badge-queued {
+  background-color: #6c757d;
+  color: #fff;
+}
+
+/* ── Charts ──────────────────────────────────────────────────────── */
+#statusPieChart {
+  max-height: 280px;
+}
+#regionBarChart {
+  max-height: 280px;
+}
+
+/* ── Table tweaks ────────────────────────────────────────────────── */
+.table td, .table th {
+  vertical-align: middle;
+}
+
+.error-message-cell {
+  max-width: 350px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.error-message-cell:hover {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* ── Refresh pulse animation ─────────────────────────────────────── */
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+.refreshing {
+  animation: pulse 1s ease-in-out;
+}
