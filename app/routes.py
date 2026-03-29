@@ -1,5 +1,7 @@
 """Flask routes – serves the dashboard page and JSON API endpoints."""
 
+import datetime
+
 from flask import Blueprint, jsonify, render_template, current_app
 
 from app.queries import (
@@ -20,6 +22,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         refresh_interval=current_app.config.get("REFRESH_INTERVAL", 30),
+        current_year=datetime.datetime.now(datetime.timezone.utc).year,
     )
 
 

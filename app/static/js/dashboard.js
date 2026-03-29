@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════
-   Integration Command Center – Premium Dashboard Logic
+   Integration Command Center – Modern Dashboard Logic
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
@@ -8,6 +8,12 @@ const REFRESH_MS = (window.REFRESH_INTERVAL || 30) * 1000;
 /* Chart instances (created once, updated on each refresh) */
 let pieChart = null;
 let barChart = null;
+
+/* Track whether this is the first data load */
+let isFirstLoad = true;
+
+/* Store all integration rows for client-side filtering */
+let integrationRows = [];
 
 /* ── Dark-theme Chart.js defaults ─────────────────────────────────── */
 Chart.defaults.color = "#94a3b8";
@@ -57,6 +63,43 @@ function animateValue(el, target) {
   tick();
 }
 
+/* Remove skeleton placeholders from a container */
+function removeSkeletons(containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var skeletons = container.querySelectorAll(".skeleton-placeholder, [id$='-skeleton']");
+  skeletons.forEach(function(el) { el.remove(); });
+}
+
+/* Show hidden canvas elements */
+function showCanvas(canvasId) {
+  var canvas = document.getElementById(canvasId);
+  if (canvas) canvas.style.display = "";
+}
+
+/* ── Toast Notifications ─────────────────────────────────────────── */
+function showToast(message, type) {
+  type = type || "info";
+  var container = document.getElementById("toast-container");
+  if (!container) return;
+
+  var icons = {
+    success: "bi-check-circle-fill",
+    error: "bi-exclamation-circle-fill",
+    info: "bi-info-circle-fill",
+  };
+
+  var toast = document.createElement("div");
+  toast.className = "toast-item toast-" + type;
+  toast.innerHTML = '<i class="bi ' + (icons[type] || icons.info) + '"></i>' + escapeHtml(message);
+  container.appendChild(toast);
+
+  setTimeout(function() {
+    toast.classList.add("toast-out");
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 3000);
+}
+
 /* ── KPI Cards ───────────────────────────────────────────────────── */
 async function refreshKPIs() {
   try {
@@ -83,6 +126,8 @@ async function refreshPieChart() {
     var hoverColors = ["#34d399", "#fbbf24", "#f87171"];
 
     if (!pieChart) {
+      removeSkeletons("pie-chart-container");
+      showCanvas("statusPieChart");
       var ctx = document.getElementById("statusPieChart").getContext("2d");
       pieChart = new Chart(ctx, {
         type: "doughnut",
@@ -100,6 +145,7 @@ async function refreshPieChart() {
           responsive: true,
           maintainAspectRatio: false,
           cutout: "72%",
+          animation: { animateRotate: true, animateScale: true, duration: 800 },
           plugins: {
             legend: {
               position: "bottom",
@@ -145,6 +191,8 @@ async function refreshBarChart() {
     var errors = rows.map(function(r) { return r.error || 0; });
 
     if (!barChart) {
+      removeSkeletons("bar-chart-container");
+      showCanvas("regionBarChart");
       var ctx = document.getElementById("regionBarChart").getContext("2d");
       barChart = new Chart(ctx, {
         type: "bar",
@@ -156,7 +204,7 @@ async function refreshBarChart() {
               data: running,
               backgroundColor: "rgba(16, 185, 129, 0.75)",
               hoverBackgroundColor: "#10b981",
-              borderRadius: 4,
+              borderRadius: 6,
               borderSkipped: false,
             },
             {
@@ -164,7 +212,7 @@ async function refreshBarChart() {
               data: stopped,
               backgroundColor: "rgba(245, 158, 11, 0.75)",
               hoverBackgroundColor: "#f59e0b",
-              borderRadius: 4,
+              borderRadius: 6,
               borderSkipped: false,
             },
             {
@@ -172,7 +220,7 @@ async function refreshBarChart() {
               data: errors,
               backgroundColor: "rgba(239, 68, 68, 0.75)",
               hoverBackgroundColor: "#ef4444",
-              borderRadius: 4,
+              borderRadius: 6,
               borderSkipped: false,
             },
           ],
@@ -180,6 +228,7 @@ async function refreshBarChart() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          animation: { duration: 800, easing: "easeOutQuart" },
           scales: {
             x: {
               stacked: true,
@@ -237,6 +286,11 @@ async function refreshTableErrors() {
     var tbody = document.querySelector("#table-error-summary tbody");
     tbody.innerHTML = "";
 
+    if (tables.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2"><div class="table-empty-state"><i class="bi bi-inbox"></i>No table data available</div></td></tr>';
+      return;
+    }
+
     tables.forEach(function(t) {
       var tr = document.createElement("tr");
       var pills = t.status_counts
@@ -256,31 +310,56 @@ async function refreshTableErrors() {
 async function refreshIntegrationStatus() {
   try {
     var res = await fetch("/api/integration-status");
-    var rows = await res.json();
-
-    document.getElementById("status-count").textContent = rows.length + " integrations";
-
-    var tbody = document.querySelector("#integration-status-table tbody");
-    tbody.innerHTML = "";
-
-    rows.forEach(function(r) {
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" + escapeHtml(r.region) + "</td>" +
-        "<td><strong>" + escapeHtml(r.integration_name) + "</strong></td>" +
-        "<td>" + statusBadge(r.status) + "</td>" +
-        "<td>" + formatDate(r.last_run_time) + "</td>" +
-        '<td class="error-message-cell" title="' +
-          escapeHtml(r.error_message) + '">' +
-          escapeHtml(r.error_message || "") +
-          (!r.error_message ? '<span style="color:#475569">&ndash;</span>' : "") +
-        "</td>" +
-        "<td>" + formatDate(r.updated_at) + "</td>";
-      tbody.appendChild(tr);
-    });
+    integrationRows = await res.json();
+    renderIntegrationTable(integrationRows);
   } catch (e) {
     /* retain previous data */
   }
+}
+
+/* Render integration table rows, optionally filtered */
+function renderIntegrationTable(rows) {
+  var searchTerm = (document.getElementById("status-search").value || "").toLowerCase();
+
+  var filtered = rows;
+  if (searchTerm) {
+    filtered = rows.filter(function(r) {
+      return (r.region || "").toLowerCase().indexOf(searchTerm) !== -1 ||
+             (r.integration_name || "").toLowerCase().indexOf(searchTerm) !== -1 ||
+             (r.status || "").toLowerCase().indexOf(searchTerm) !== -1;
+    });
+  }
+
+  var countEl = document.getElementById("status-count");
+  if (searchTerm && filtered.length !== rows.length) {
+    countEl.textContent = filtered.length + " of " + rows.length + " integrations";
+  } else {
+    countEl.textContent = rows.length + " integrations";
+  }
+
+  var tbody = document.querySelector("#integration-status-table tbody");
+  tbody.innerHTML = "";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="table-empty-state"><i class="bi bi-search"></i>No matching integrations found</div></td></tr>';
+    return;
+  }
+
+  filtered.forEach(function(r) {
+    var tr = document.createElement("tr");
+    tr.innerHTML =
+      "<td>" + escapeHtml(r.region) + "</td>" +
+      "<td><strong>" + escapeHtml(r.integration_name) + "</strong></td>" +
+      "<td>" + statusBadge(r.status) + "</td>" +
+      "<td>" + formatDate(r.last_run_time) + "</td>" +
+      '<td class="error-message-cell" title="' +
+        escapeHtml(r.error_message) + '">' +
+        escapeHtml(r.error_message || "") +
+        (!r.error_message ? '<span style="color:#475569">&ndash;</span>' : "") +
+      "</td>" +
+      "<td>" + formatDate(r.updated_at) + "</td>";
+    tbody.appendChild(tr);
+  });
 }
 
 /* ── Orchestrator ────────────────────────────────────────────────── */
@@ -299,10 +378,23 @@ async function refreshAll() {
 
   el.textContent = "Last updated: " + new Date().toLocaleTimeString();
   el.classList.remove("refreshing");
+
+  if (!isFirstLoad) {
+    showToast("Dashboard data refreshed", "success");
+  }
+  isFirstLoad = false;
 }
 
 /* Run on load, then auto-refresh */
 document.addEventListener("DOMContentLoaded", function() {
   refreshAll();
   setInterval(refreshAll, REFRESH_MS);
+
+  /* Search / filter input handler */
+  var searchInput = document.getElementById("status-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", function() {
+      renderIntegrationTable(integrationRows);
+    });
+  }
 });

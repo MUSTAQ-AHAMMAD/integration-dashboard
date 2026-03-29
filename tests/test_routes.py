@@ -110,3 +110,49 @@ def test_api_table_errors_detail_invalid_table(mock_detail, client):
     resp = client.get("/api/table-errors/nonexistent_table")
     assert resp.status_code == 200
     assert resp.get_json() == []
+
+
+# ── Modern UI elements ────────────────────────────────────────────────
+def test_dashboard_contains_search_input(client):
+    """The dashboard should have a search/filter input for integration status."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert 'id="status-search"' in html
+
+
+def test_dashboard_contains_skeleton_loaders(client):
+    """The dashboard should have skeleton loading placeholders."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert "skeleton" in html
+
+
+def test_dashboard_contains_entrance_animations(client):
+    """The dashboard should have entrance animation CSS classes."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert "animate-in" in html
+
+
+def test_dashboard_contains_footer(client):
+    """The dashboard should have a footer section."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert "dashboard-footer" in html
+
+
+def test_dashboard_contains_toast_container(client):
+    """The dashboard should have a toast notification container."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert 'id="toast-container"' in html
+
+
+def test_dashboard_contains_current_year(client):
+    """The dashboard footer should contain the current year."""
+    import datetime
+
+    resp = client.get("/")
+    html = resp.data.decode()
+    current_year = str(datetime.datetime.now(datetime.timezone.utc).year)
+    assert current_year in html
