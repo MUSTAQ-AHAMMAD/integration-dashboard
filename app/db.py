@@ -112,8 +112,22 @@ def get_connection():
             _reset_pool()
             pool = _create_pool()
             return pool.acquire()
-        logger.exception("Failed to acquire connection from pool for %s", _dsn_label())
-        raise
+        else:
+            logger.exception(
+                "Failed to acquire connection from pool for %s", _dsn_label()
+            )
+            raise
+
+
+def _run_query(conn, query, params):
+    """Execute *query* on *conn* and return rows as a list of dicts."""
+    cursor = conn.cursor()
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+    columns = [col[0].lower() for col in cursor.description]
+    return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
 def execute_query(query, params=None):
@@ -125,35 +139,24 @@ def execute_query(query, params=None):
     conn = None
     try:
         conn = get_connection()
-        cursor = conn.cursor()
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        columns = [col[0].lower() for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return _run_query(conn, query, params)
     except oracledb.Error as exc:
         if _is_connection_closed_error(exc):
             logger.warning("Connection lost during query (DPY-4011), retrying once")
             _reset_pool()
-            conn2 = None
+            retry_conn = None
             try:
-                conn2 = get_connection()
-                cursor2 = conn2.cursor()
-                if params:
-                    cursor2.execute(query, params)
-                else:
-                    cursor2.execute(query)
-                columns = [col[0].lower() for col in cursor2.description]
-                return [dict(zip(columns, row)) for row in cursor2.fetchall()]
+                retry_conn = get_connection()
+                return _run_query(retry_conn, query, params)
             except oracledb.Error:
                 logger.exception("Retry query also failed")
                 raise
             finally:
-                if conn2 is not None:
-                    conn2.close()
-        logger.exception("Database query failed")
-        raise
+                if retry_conn is not None:
+                    retry_conn.close()
+        else:
+            logger.exception("Database query failed")
+            raise
     finally:
         if conn is not None:
             conn.close()
