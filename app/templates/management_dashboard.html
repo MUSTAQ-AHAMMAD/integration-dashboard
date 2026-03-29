@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Management Dashboard – Integration Dashboard{% endblock %}
+
+{% block content %}
+<!-- Top Navbar -->
+<nav class="navbar-custom">
+  <div class="d-flex align-items-center">
+    <div class="navbar-logo">
+      <i class="bi bi-diagram-3-fill"></i>
+    </div>
+    <div>
+      <h1 class="navbar-title">Management Dashboard</h1>
+      <p class="navbar-subtitle">Country-Level Integration Progress &middot; Status Overview</p>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-link-custom"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('main.management_dashboard') }}" class="nav-link-custom active"><i class="bi bi-clipboard-data"></i> Management</a>
+    <a href="{{ url_for('main.integration_report') }}" class="nav-link-custom"><i class="bi bi-file-earmark-text"></i> Integration Report</a>
+    <a href="{{ url_for('main.transaction_report') }}" class="nav-link-custom"><i class="bi bi-receipt"></i> Transaction Report</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('main.admin_users') }}" class="nav-link-custom"><i class="bi bi-people"></i> Users</a>
+    {% endif %}
+    <a href="{{ url_for('main.logout') }}" class="nav-link-custom" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- KPI Summary Cards -->
+  <div class="kpi-strip mb-4" id="mgmt-kpi-cards">
+    <div class="kpi-card kpi-total animate-in animate-in-delay-1">
+      <div class="kpi-icon"><i class="bi bi-globe2"></i></div>
+      <div class="kpi-content">
+        <span class="kpi-label">Countries</span>
+        <span class="kpi-value" id="mgmt-kpi-countries">&ndash;</span>
+      </div>
+      <div class="kpi-glow"></div>
+    </div>
+    <div class="kpi-card kpi-running animate-in animate-in-delay-2">
+      <div class="kpi-icon"><i class="bi bi-play-circle-fill"></i></div>
+      <div class="kpi-content">
+        <span class="kpi-label">Running</span>
+        <span class="kpi-value" id="mgmt-kpi-running">&ndash;</span>
+      </div>
+      <div class="kpi-glow"></div>
+    </div>
+    <div class="kpi-card kpi-stopped animate-in animate-in-delay-3">
+      <div class="kpi-icon"><i class="bi bi-pause-circle-fill"></i></div>
+      <div class="kpi-content">
+        <span class="kpi-label">Not Running</span>
+        <span class="kpi-value" id="mgmt-kpi-notrunning">&ndash;</span>
+      </div>
+      <div class="kpi-glow"></div>
+    </div>
+    <div class="kpi-card kpi-error animate-in animate-in-delay-4">
+      <div class="kpi-icon"><i class="bi bi-check2-all"></i></div>
+      <div class="kpi-content">
+        <span class="kpi-label">Up to Date</span>
+        <span class="kpi-value" id="mgmt-kpi-uptodate">&ndash;</span>
+      </div>
+      <div class="kpi-glow"></div>
+    </div>
+  </div>
+
+  <!-- Management Report Tables -->
+  <div class="row g-4 mb-4 animate-in animate-in-delay-5">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <span><i class="bi bi-file-earmark-bar-graph-fill me-2"></i>Integration Management Report</span>
+          <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-sm btn-outline-primary" id="btn-mgmt-refresh">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            <span class="text-muted small" id="mgmt-last-updated"></span>
+          </div>
+        </div>
+        <div class="glass-card-body p-0" id="mgmt-report-container">
+          <div class="p-4">
+            <div class="skeleton skeleton-chart"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Status Overview -->
+  <div class="row g-4 mb-4 animate-in animate-in-delay-6">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header">
+          <i class="bi bi-database-fill-gear me-2"></i>Oracle Table Status Summary
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="mgmt-table-summary">
+              <thead>
+                <tr>
+                  <th>Table Name</th>
+                  <th>Status Breakdown</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="dashboard-footer">
+  <span>Integration Command Center &copy; {{ current_year }} &middot; Powered by Flask &amp; Chart.js</span>
+</footer>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/management.js') }}"></script>
+{% endblock %}

@@ -152,6 +152,16 @@ def logout():
 
 
 # ── Report routes ──────────────────────────────────────────────────────
+@main_bp.route("/management")
+@login_required
+def management_dashboard():
+    """Render the management dashboard page."""
+    return render_template(
+        "management_dashboard.html",
+        current_year=datetime.datetime.now(datetime.timezone.utc).year,
+    )
+
+
 @main_bp.route("/reports/integration")
 @login_required
 def integration_report():
