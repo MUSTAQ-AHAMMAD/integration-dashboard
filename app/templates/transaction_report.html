@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Transaction Report – Dashboard{% endblock %}
+
+{% block content %}
+<!-- Top Navbar -->
+<nav class="navbar-custom">
+  <div class="d-flex align-items-center">
+    <div class="navbar-logo">
+      <i class="bi bi-diagram-3-fill"></i>
+    </div>
+    <div>
+      <h1 class="navbar-title">Transaction Report</h1>
+      <p class="navbar-subtitle">Misc Receipt &middot; Standard Receipt &middot; Apply Receipt &middot; Inventory Txn</p>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-link-custom"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('main.integration_report') }}" class="nav-link-custom"><i class="bi bi-file-earmark-text"></i> Integration Report</a>
+    <a href="{{ url_for('main.transaction_report') }}" class="nav-link-custom active"><i class="bi bi-receipt"></i> Transaction Report</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('main.admin_users') }}" class="nav-link-custom"><i class="bi bi-people"></i> Users</a>
+    {% endif %}
+    <a href="{{ url_for('main.logout') }}" class="nav-link-custom" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- Region Filter -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="glass-card p-3">
+        <label for="region-filter" class="form-label fw-semibold"><i class="bi bi-funnel me-1"></i>Filter by Region</label>
+        <select class="form-select" id="region-filter">
+          <option value="">All Regions</option>
+        </select>
+      </div>
+    </div>
+    <div class="col-md-8 d-flex align-items-end">
+      <button class="btn btn-primary me-2" id="btn-refresh"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+      <span class="text-muted small" id="report-last-updated"></span>
+    </div>
+  </div>
+
+  <!-- Fusion Misc Receipt -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-cash-stack me-2"></i>Fusion Misc Receipt</span>
+          <span class="header-badge" id="misc-receipt-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="misc-receipt-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Receipt Number</th>
+                  <th>Receipt Method</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>GL Date</th>
+                  <th>Receipt Date</th>
+                  <th>Exchange Date</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="13" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fusion Standard Receipt -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-receipt-cutoff me-2"></i>Fusion Standard Receipt</span>
+          <span class="header-badge" id="standard-receipt-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="standard-receipt-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Receipt Number</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>GL Date</th>
+                  <th>Receipt Date</th>
+                  <th>Exchange Date</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="12" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fusion Apply Receipt -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-check2-square me-2"></i>Fusion Apply Receipt</span>
+          <span class="header-badge" id="apply-receipt-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="apply-receipt-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Txn Number</th>
+                  <th>Receipt Number</th>
+                  <th>Amount Applied</th>
+                  <th>Currency</th>
+                  <th>Accounting Date</th>
+                  <th>Application Date</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="12" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fusion Inventory Transaction -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-box-seam me-2"></i>Fusion Inventory Transaction</span>
+          <span class="header-badge" id="inv-txn-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="inv-txn-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Organization</th>
+                  <th>Item Number</th>
+                  <th>Txn Source</th>
+                  <th>Sub-Inventory</th>
+                  <th>Txn Date</th>
+                  <th>Txn Qty</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="12" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="dashboard-footer">
+  <span>Integration Command Center &copy; {{ current_year }} &middot; Powered by Flask &amp; Chart.js</span>
+</footer>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    initTransactionReport();
+  });
+</script>
+{% endblock %}

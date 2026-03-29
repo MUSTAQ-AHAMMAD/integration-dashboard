@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Integration Report – Dashboard{% endblock %}
+
+{% block content %}
+<!-- Top Navbar -->
+<nav class="navbar-custom">
+  <div class="d-flex align-items-center">
+    <div class="navbar-logo">
+      <i class="bi bi-diagram-3-fill"></i>
+    </div>
+    <div>
+      <h1 class="navbar-title">Integration Report</h1>
+      <p class="navbar-subtitle">Invoice Headers &middot; Invoice Lines &middot; Integration Status</p>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-3">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-link-custom"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('main.integration_report') }}" class="nav-link-custom active"><i class="bi bi-file-earmark-text"></i> Integration Report</a>
+    <a href="{{ url_for('main.transaction_report') }}" class="nav-link-custom"><i class="bi bi-receipt"></i> Transaction Report</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('main.admin_users') }}" class="nav-link-custom"><i class="bi bi-people"></i> Users</a>
+    {% endif %}
+    <a href="{{ url_for('main.logout') }}" class="nav-link-custom" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- Region Filter -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="glass-card p-3">
+        <label for="region-filter" class="form-label fw-semibold"><i class="bi bi-funnel me-1"></i>Filter by Region</label>
+        <select class="form-select" id="region-filter">
+          <option value="">All Regions</option>
+        </select>
+      </div>
+    </div>
+    <div class="col-md-8 d-flex align-items-end">
+      <button class="btn btn-primary me-2" id="btn-refresh"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+      <span class="text-muted small" id="report-last-updated"></span>
+    </div>
+  </div>
+
+  <!-- Sales Integration Status -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header">
+          <i class="bi bi-activity me-2"></i>Sales Integration Status (Region &times; Mode)
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="sales-status-table">
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>Integration Mode</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="3" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fusion Invoice Header -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-file-earmark-spreadsheet me-2"></i>Fusion Invoice Header</span>
+          <span class="header-badge" id="invoice-header-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="invoice-header-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Bill To Customer</th>
+                  <th>Bill To Location</th>
+                  <th>Business Unit</th>
+                  <th>Txn Source</th>
+                  <th>GL Date</th>
+                  <th>Txn Number</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="12" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fusion Invoice Line -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="glass-card">
+        <div class="glass-card-header d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-list-ol me-2"></i>Fusion Invoice Line</span>
+          <span class="header-badge" id="invoice-line-count"></span>
+        </div>
+        <div class="glass-card-body p-0">
+          <div class="table-responsive">
+            <table class="table dark-table mb-0" id="invoice-line-table">
+              <thead>
+                <tr>
+                  <th>Row ID</th>
+                  <th>Request ID</th>
+                  <th>Status</th>
+                  <th>Message</th>
+                  <th>Request Date</th>
+                  <th>Invoice Number</th>
+                  <th>Line #</th>
+                  <th>Item Number</th>
+                  <th>Description</th>
+                  <th>Quantity</th>
+                  <th>Unit Price</th>
+                  <th>Currency</th>
+                  <th>Region</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="13" class="text-center text-muted">Loading&hellip;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="dashboard-footer">
+  <span>Integration Command Center &copy; {{ current_year }} &middot; Powered by Flask &amp; Chart.js</span>
+</footer>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/reports.js') }}"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    initIntegrationReport();
+  });
+</script>
+{% endblock %}

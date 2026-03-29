@@ -118,3 +118,143 @@ def get_overall_kpis():
         if st in kpis:
             kpis[st] = row["count"]
     return kpis
+
+
+# ── Available regions ──────────────────────────────────────────────────
+def get_available_regions():
+    """Return distinct regions from sales_integration_status."""
+    query = """
+        SELECT DISTINCT region
+        FROM odoo_integration.sales_integration_status
+        ORDER BY region
+    """
+    rows = execute_query(query)
+    return [r["region"] for r in rows]
+
+
+# ── Sales integration detail ──────────────────────────────────────────
+def get_sales_integration_detail():
+    """Return SALES_INTEGRATION_STATUS with REGION, INTEG_MODE, STATUS."""
+    query = """
+        SELECT region, integ_mode, status
+        FROM odoo_integration.sales_integration_status
+        ORDER BY region, integ_mode
+    """
+    return execute_query(query)
+
+
+# ── Report queries (region-filtered) ──────────────────────────────────
+def get_fusion_invoice_line_report(region=None):
+    """Query FUSION_INVOICE_LINE: status, message, request_date, invoice_number (latest)."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               invoice_number, line_number, item_number, description,
+               quantity, unit_selling_price, currency_code, region
+        FROM odoo_integration.fusion_invoice_line
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_fusion_misc_receipt_report(region=None):
+    """Query FUSION_MISC_RECEIPT: status, message, request_date, gl_date, receipt_date, exchange_date."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               receipt_number, receipt_method_name, bank_acc_number,
+               amount, currency_code, gl_date, receipt_date, exchange_date, region, integ_mode
+        FROM odoo_integration.fusion_misc_receipt
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_fusion_standard_receipt_report(region=None):
+    """Query FUSION_STANDARD_RECEIPT: status, message, request_date, gl_date, receipt_date, exchange_date."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               receipt_number, amount, currency_code,
+               gl_date, receipt_date, exchange_date, region, integ_mode
+        FROM odoo_integration.fusion_standard_receipt
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_fusion_apply_receipt_report(region=None):
+    """Query FUSION_APPLY_RECEIPT: status, message, request_date, txn_number, receipt_number."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               accounting_date, application_date, txn_number, receipt_number,
+               amount_applied, currency_code, region, integ_mode
+        FROM odoo_integration.fusion_apply_receipt
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_fusion_inv_txn_report(region=None):
+    """Query FUSION_INV_TXN: status, message, request_date, txn_source_name, sunbinventory, txn_date."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               organization_name, item_number, txn_source_name,
+               sunbinventory, txn_date, txn_qty, region, integ_mode
+        FROM odoo_integration.fusion_inv_txn
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_fusion_invoice_header_report(region=None):
+    """Query FUSION_INVOICE_HEADER: status, message, request_date, bill_to details, txn details."""
+    where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+    params = {"region": region} if region else {}
+    query = f"""
+        SELECT row_id, request_id, status, message, request_date,
+               bill_to_cust_name, bill_to_location, business_unit,
+               txn_source, txn_type, txn_date, gl_date,
+               currency_code, txn_number, region
+        FROM odoo_integration.fusion_invoice_header
+        {where}
+        ORDER BY row_id DESC
+        FETCH FIRST 200 ROWS ONLY
+    """
+    return execute_query(query, params if params else None)
+
+
+def get_table_status_summary(region=None):
+    """Return success/failed counts per table, optionally filtered by region."""
+    results = []
+    for table in INTEGRATION_TABLES:
+        short_name = table.split(".")[-1]
+        where = "WHERE LOWER(region) = LOWER(:region)" if region else ""
+        params = {"region": region} if region else {}
+        query = f"""
+            SELECT status, COUNT(*) AS count
+            FROM {table}
+            {where}
+            GROUP BY status
+            ORDER BY status
+        """  # noqa: S608
+        rows = execute_query(query, params if params else None)
+        results.append({"table": short_name, "status_counts": rows})
+    return results

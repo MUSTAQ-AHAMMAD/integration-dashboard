@@ -13,10 +13,17 @@
     </div>
   </div>
   <div class="d-flex align-items-center gap-3">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-link-custom active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    <a href="{{ url_for('main.integration_report') }}" class="nav-link-custom"><i class="bi bi-file-earmark-text"></i> Integration Report</a>
+    <a href="{{ url_for('main.transaction_report') }}" class="nav-link-custom"><i class="bi bi-receipt"></i> Transaction Report</a>
+    {% if current_user.role == 'admin' %}
+    <a href="{{ url_for('main.admin_users') }}" class="nav-link-custom"><i class="bi bi-people"></i> Users</a>
+    {% endif %}
     <span class="live-indicator">
       <span class="live-dot"></span> LIVE
     </span>
     <span class="text-muted small" id="last-updated">Loading&hellip;</span>
+    <a href="{{ url_for('main.logout') }}" class="nav-link-custom" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
   </div>
 </nav>
 
@@ -188,4 +195,8 @@
 
 <!-- store refresh interval from server config -->
 <script>window.REFRESH_INTERVAL = {{ refresh_interval }};</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
