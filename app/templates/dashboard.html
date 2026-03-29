@@ -16,15 +16,15 @@
     <span class="live-indicator">
       <span class="live-dot"></span> LIVE
     </span>
-    <span class="text-light opacity-75 small" id="last-updated">Loading&hellip;</span>
+    <span class="text-muted small" id="last-updated">Loading&hellip;</span>
   </div>
 </nav>
 
 <div class="container-fluid px-4 py-4">
 
   <!-- KPI Cards -->
-  <div class="row g-4 mb-4" id="kpi-cards">
-    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-1">
+  <div class="row g-3 mb-4" id="kpi-cards">
+    <div class="col-6 col-md-3 animate-in animate-in-delay-1">
       <div class="kpi-card kpi-total">
         <div class="kpi-icon">
           <i class="bi bi-grid-3x3-gap-fill"></i>
@@ -36,7 +36,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-2">
+    <div class="col-6 col-md-3 animate-in animate-in-delay-2">
       <div class="kpi-card kpi-running">
         <div class="kpi-icon">
           <i class="bi bi-play-circle-fill"></i>
@@ -48,7 +48,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-3">
+    <div class="col-6 col-md-3 animate-in animate-in-delay-3">
       <div class="kpi-card kpi-stopped">
         <div class="kpi-icon">
           <i class="bi bi-pause-circle-fill"></i>
@@ -60,7 +60,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-4">
+    <div class="col-6 col-md-3 animate-in animate-in-delay-4">
       <div class="kpi-card kpi-error">
         <div class="kpi-icon">
           <i class="bi bi-exclamation-triangle-fill"></i>
@@ -74,8 +74,8 @@
     </div>
   </div>
 
-  <!-- Charts Row -->
-  <div class="row g-4 mb-4">
+  <!-- Charts & Summary Row: Pie Chart + Oracle Table Summary side by side -->
+  <div class="row g-3 mb-4">
     <div class="col-lg-5 animate-in animate-in-delay-3">
       <div class="glass-card h-100">
         <div class="glass-card-header">
@@ -89,21 +89,6 @@
     </div>
     <div class="col-lg-7 animate-in animate-in-delay-4">
       <div class="glass-card h-100">
-        <div class="glass-card-header">
-          <i class="bi bi-bar-chart-fill me-2"></i>Region-wise Integration Status
-        </div>
-        <div class="glass-card-body" id="bar-chart-container">
-          <div class="skeleton skeleton-chart" id="bar-skeleton"></div>
-          <canvas id="regionBarChart" style="display:none"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Table Error Summary -->
-  <div class="row g-4 mb-4 animate-in animate-in-delay-5">
-    <div class="col-12">
-      <div class="glass-card">
         <div class="glass-card-header">
           <i class="bi bi-database-fill-gear me-2"></i>Oracle Table Status Summary
         </div>
@@ -128,8 +113,23 @@
     </div>
   </div>
 
+  <!-- Region Bar Chart: Full Width -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 animate-in animate-in-delay-5">
+      <div class="glass-card">
+        <div class="glass-card-header">
+          <i class="bi bi-bar-chart-fill me-2"></i>Region-wise Integration Status
+        </div>
+        <div class="glass-card-body" id="bar-chart-container">
+          <div class="skeleton skeleton-chart" id="bar-skeleton"></div>
+          <canvas id="regionBarChart" style="display:none"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Integration Status Detail Table -->
-  <div class="row g-4 mb-4 animate-in animate-in-delay-6">
+  <div class="row g-3 mb-4 animate-in animate-in-delay-6">
     <div class="col-12">
       <div class="glass-card">
         <div class="glass-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">

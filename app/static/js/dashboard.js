@@ -16,8 +16,8 @@ let isFirstLoad = true;
 let integrationRows = [];
 
 /* ── Dark-theme Chart.js defaults ─────────────────────────────────── */
-Chart.defaults.color = "#94a3b8";
-Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+Chart.defaults.color = "#475569";
+Chart.defaults.borderColor = "rgba(0,0,0,0.06)";
 Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
 
 /* Respect prefers-reduced-motion for chart animations */
@@ -44,7 +44,7 @@ function escapeHtml(text) {
 }
 
 function formatDate(val) {
-  if (!val) return '<span style="color:#475569">&ndash;</span>';
+  if (!val) return '<span style="color:#94a3b8">&ndash;</span>';
   var d = new Date(val);
   if (isNaN(d.getTime())) return escapeHtml(String(val));
   return d.toLocaleString();
@@ -161,10 +161,10 @@ async function refreshPieChart() {
               },
             },
             tooltip: {
-              backgroundColor: "rgba(17, 24, 39, 0.95)",
-              titleColor: "#f1f5f9",
-              bodyColor: "#94a3b8",
-              borderColor: "rgba(255,255,255,0.1)",
+              backgroundColor: "#ffffff",
+              titleColor: "#1e293b",
+              bodyColor: "#475569",
+              borderColor: "rgba(0,0,0,0.1)",
               borderWidth: 1,
               cornerRadius: 10,
               padding: 14,
@@ -243,7 +243,7 @@ async function refreshBarChart() {
               stacked: true,
               beginAtZero: true,
               ticks: { stepSize: 1, font: { size: 11 } },
-              grid: { color: "rgba(255,255,255,0.04)" },
+              grid: { color: "rgba(0,0,0,0.04)" },
             },
           },
           plugins: {
@@ -257,10 +257,10 @@ async function refreshBarChart() {
               },
             },
             tooltip: {
-              backgroundColor: "rgba(17, 24, 39, 0.95)",
-              titleColor: "#f1f5f9",
-              bodyColor: "#94a3b8",
-              borderColor: "rgba(255,255,255,0.1)",
+              backgroundColor: "#ffffff",
+              titleColor: "#1e293b",
+              bodyColor: "#475569",
+              borderColor: "rgba(0,0,0,0.1)",
               borderWidth: 1,
               cornerRadius: 10,
               padding: 14,
@@ -302,7 +302,7 @@ async function refreshTableErrors() {
         .join("");
       tr.innerHTML =
         '<td><span class="table-name">' + escapeHtml(t.table) + "</span></td>" +
-        "<td>" + (pills || '<span style="color:#475569">No data</span>') + "</td>";
+        "<td>" + (pills || '<span style="color:#94a3b8">No data</span>') + "</td>";
       tbody.appendChild(tr);
     });
   } catch (e) {
@@ -359,7 +359,7 @@ function renderIntegrationTable(rows) {
       '<td class="error-message-cell" title="' +
         escapeHtml(r.error_message) + '">' +
         escapeHtml(r.error_message || "") +
-        (!r.error_message ? '<span style="color:#475569">&ndash;</span>' : "") +
+        (!r.error_message ? '<span style="color:#94a3b8">&ndash;</span>' : "") +
       "</td>" +
       "<td>" + formatDate(r.updated_at) + "</td>";
     tbody.appendChild(tr);
