@@ -3,6 +3,7 @@
 import datetime
 import logging
 
+import oracledb
 from flask import Blueprint, jsonify, render_template, current_app
 
 from app.db import get_connection
@@ -35,7 +36,7 @@ def dashboard():
 def api_kpis():
     try:
         return jsonify(get_overall_kpis())
-    except Exception:
+    except oracledb.Error:
         logger.exception("Failed to fetch KPIs")
         return jsonify({"error": "Database error: unable to fetch KPIs"}), 500
 
@@ -44,7 +45,7 @@ def api_kpis():
 def api_integration_status():
     try:
         return jsonify(get_integration_status())
-    except Exception:
+    except oracledb.Error:
         logger.exception("Failed to fetch integration status")
         return jsonify({"error": "Database error: unable to fetch integration status"}), 500
 
@@ -53,7 +54,7 @@ def api_integration_status():
 def api_region_summary():
     try:
         return jsonify(get_region_summary())
-    except Exception:
+    except oracledb.Error:
         logger.exception("Failed to fetch region summary")
         return jsonify({"error": "Database error: unable to fetch region summary"}), 500
 
@@ -62,7 +63,7 @@ def api_region_summary():
 def api_table_errors():
     try:
         return jsonify(get_table_error_summary())
-    except Exception:
+    except oracledb.Error:
         logger.exception("Failed to fetch table error summary")
         return jsonify({"error": "Database error: unable to fetch table errors"}), 500
 
@@ -71,7 +72,7 @@ def api_table_errors():
 def api_table_errors_detail(table_name):
     try:
         return jsonify(get_table_errors(table_name))
-    except Exception:
+    except oracledb.Error:
         logger.exception("Failed to fetch table error details")
         return jsonify({"error": "Database error: unable to fetch table error details"}), 500
 

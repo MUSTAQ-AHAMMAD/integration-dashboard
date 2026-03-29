@@ -127,7 +127,10 @@ async function refreshKPIs() {
 async function refreshPieChart() {
   try {
     var res = await fetch("/api/kpis");
-    if (!res.ok) return; /* error already shown by refreshKPIs */
+    if (!res.ok) {
+      showToast("Failed to load status chart", "error");
+      return;
+    }
     var data = await res.json();
 
     var labels = ["Running", "Stopped", "Error"];
