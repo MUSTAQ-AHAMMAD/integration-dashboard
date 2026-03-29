@@ -1,5 +1,6 @@
 """Tests for the dashboard routes."""
 
+import oracledb
 from unittest.mock import patch
 
 
@@ -170,3 +171,71 @@ def test_db_init_stores_mode(app):
 
     assert _app_config is not None
     assert _app_config["mode"] == "SYSDBA"
+
+
+# ── API error handling ────────────────────────────────────────────────
+@patch("app.routes.get_overall_kpis", side_effect=oracledb.Error("connection failed"))
+def test_api_kpis_returns_500_on_db_error(mock_kpis, client):
+    """GET /api/kpis should return 500 with an error message on DB failure."""
+    resp = client.get("/api/kpis")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+@patch("app.routes.get_integration_status", side_effect=oracledb.Error("connection failed"))
+def test_api_integration_status_returns_500_on_db_error(mock_status, client):
+    """GET /api/integration-status should return 500 on DB failure."""
+    resp = client.get("/api/integration-status")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+@patch("app.routes.get_region_summary", side_effect=oracledb.Error("connection failed"))
+def test_api_region_summary_returns_500_on_db_error(mock_region, client):
+    """GET /api/region-summary should return 500 on DB failure."""
+    resp = client.get("/api/region-summary")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+@patch("app.routes.get_table_error_summary", side_effect=oracledb.Error("connection failed"))
+def test_api_table_errors_returns_500_on_db_error(mock_table, client):
+    """GET /api/table-errors should return 500 on DB failure."""
+    resp = client.get("/api/table-errors")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+@patch("app.routes.get_table_errors", side_effect=oracledb.Error("connection failed"))
+def test_api_table_errors_detail_returns_500_on_db_error(mock_detail, client):
+    """GET /api/table-errors/<name> should return 500 on DB failure."""
+    resp = client.get("/api/table-errors/fusion_invoice_header")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "error" in data
+
+
+# ── Health check endpoint ─────────────────────────────────────────────
+@patch("app.routes.get_connection")
+def test_api_health_ok(mock_conn, client):
+    """GET /api/health should return 200 when DB is reachable."""
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["status"] == "ok"
+    assert data["database"] == "connected"
+
+
+@patch("app.routes.get_connection", side_effect=oracledb.Error("connection refused"))
+def test_api_health_db_error(mock_conn, client):
+    """GET /api/health should return 500 when DB is unreachable."""
+    resp = client.get("/api/health")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["status"] == "error"
+    assert data["database"] == "disconnected"
+    assert "detail" in data

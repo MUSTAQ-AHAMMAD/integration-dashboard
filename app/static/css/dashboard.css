@@ -741,3 +741,25 @@ body::before {
   }
   .animate-in { opacity: 1; }
 }
+
+/* ── Connection Error Banner ─────────────────────────────────────────── */
+.connection-banner {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border: 1px solid #fca5a5;
+  border-left: 4px solid var(--accent-red);
+  color: #991b1b;
+  padding: 14px 24px;
+  margin: 0 16px 0 16px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+}
+.connection-banner .small {
+  color: #b91c1c;
+  font-weight: 400;
+}

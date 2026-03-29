@@ -53,7 +53,7 @@ def execute_query(query, params=None):
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
     except oracledb.Error:
         logger.exception("Database query failed")
-        return []
+        raise
     finally:
         if conn is not None:
             conn.close()
