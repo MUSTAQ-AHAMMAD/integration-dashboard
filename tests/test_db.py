@@ -286,3 +286,145 @@ def test_close_pool_resets_even_on_error():
     db_module._pool = mock_pool
     db_module.close_pool()  # should not raise
     assert db_module._pool is None
+
+
+# ── _is_connection_closed_error ────────────────────────────────────────
+def test_is_connection_closed_error_detects_dpy4011():
+    """_is_connection_closed_error should return True for DPY-4011 messages."""
+    exc = oracledb.Error("DPY-4011: the database or network closed the connection")
+    assert db_module._is_connection_closed_error(exc) is True
+
+
+def test_is_connection_closed_error_ignores_other_errors():
+    """_is_connection_closed_error should return False for non-DPY-4011 errors."""
+    exc = oracledb.Error("ORA-00942: table or view does not exist")
+    assert db_module._is_connection_closed_error(exc) is False
+
+
+# ── _reset_pool ────────────────────────────────────────────────────────
+def test_reset_pool_destroys_and_clears():
+    """_reset_pool should close the pool and set _pool to None."""
+    _make_app()
+    mock_pool = MagicMock()
+    db_module._pool = mock_pool
+    db_module._reset_pool()
+    mock_pool.close.assert_called_once_with(force=True)
+    assert db_module._pool is None
+
+
+def test_reset_pool_noop_when_no_pool():
+    """_reset_pool should be a no-op when there is no pool."""
+    _make_app()
+    db_module._pool = None
+    db_module._reset_pool()  # should not raise
+    assert db_module._pool is None
+
+
+# ── _create_pool (ping_interval) ──────────────────────────────────────
+@patch("app.db.oracledb.create_pool")
+def test_create_pool_sets_ping_interval(mock_create):
+    """_create_pool should set ping_interval=0 to detect stale connections."""
+    _make_app()
+    db_module._pool = None
+    db_module._create_pool()
+    kwargs = mock_create.call_args[1]
+    assert kwargs["ping_interval"] == 0
+
+
+# ── get_connection retry on DPY-4011 ──────────────────────────────────
+@patch("app.db._create_pool")
+def test_get_connection_retries_on_dpy4011(mock_pool_fn):
+    """get_connection should reset the pool and retry on DPY-4011."""
+    _make_app()
+    bad_pool = MagicMock()
+    good_pool = MagicMock()
+    bad_pool.acquire.side_effect = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    # First call returns bad pool, second call (after reset) returns good pool
+    mock_pool_fn.side_effect = [bad_pool, good_pool]
+
+    conn = db_module.get_connection()
+    assert conn is good_pool.acquire.return_value
+    assert mock_pool_fn.call_count == 2
+
+
+@patch("app.db._create_pool")
+def test_get_connection_raises_non_dpy4011_error(mock_pool_fn):
+    """get_connection should propagate non-DPY-4011 errors without retry."""
+    _make_app()
+    mock_pool = MagicMock()
+    mock_pool.acquire.side_effect = oracledb.Error("ORA-12541: TNS:no listener")
+    mock_pool_fn.return_value = mock_pool
+
+    with pytest.raises(oracledb.Error, match="ORA-12541"):
+        db_module.get_connection()
+    # Only one attempt – no retry for non-DPY-4011 errors
+    assert mock_pool_fn.call_count == 1
+
+
+# ── execute_query retry on DPY-4011 ───────────────────────────────────
+@patch("app.db.get_connection")
+def test_execute_query_retries_on_dpy4011(mock_conn_fn):
+    """execute_query should retry the query once on DPY-4011."""
+    # First connection: cursor.execute raises DPY-4011
+    bad_cursor = MagicMock()
+    bad_cursor.execute.side_effect = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    bad_conn = MagicMock()
+    bad_conn.cursor.return_value = bad_cursor
+
+    # Second connection (after retry): works normally
+    good_cursor = MagicMock()
+    good_cursor.description = [("ID",), ("NAME",)]
+    good_cursor.fetchall.return_value = [(1, "Alice")]
+    good_conn = MagicMock()
+    good_conn.cursor.return_value = good_cursor
+
+    mock_conn_fn.side_effect = [bad_conn, good_conn]
+
+    with patch("app.db._reset_pool") as mock_reset:
+        rows = db_module.execute_query("SELECT id, name FROM users")
+
+    assert rows == [{"id": 1, "name": "Alice"}]
+    mock_reset.assert_called_once()
+    bad_conn.close.assert_called_once()
+    good_conn.close.assert_called_once()
+
+
+@patch("app.db.get_connection")
+def test_execute_query_raises_on_retry_failure(mock_conn_fn):
+    """execute_query should raise if the retry also fails."""
+    bad_cursor = MagicMock()
+    bad_cursor.execute.side_effect = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    bad_conn1 = MagicMock()
+    bad_conn1.cursor.return_value = bad_cursor
+
+    bad_cursor2 = MagicMock()
+    bad_cursor2.execute.side_effect = oracledb.Error("ORA-01034: ORACLE not available")
+    bad_conn2 = MagicMock()
+    bad_conn2.cursor.return_value = bad_cursor2
+
+    mock_conn_fn.side_effect = [bad_conn1, bad_conn2]
+
+    with patch("app.db._reset_pool"):
+        with pytest.raises(oracledb.Error, match="ORA-01034"):
+            db_module.execute_query("SELECT 1 FROM DUAL")
+
+
+@patch("app.db.get_connection")
+def test_execute_query_no_retry_on_other_errors(mock_conn_fn):
+    """execute_query should NOT retry on non-DPY-4011 errors."""
+    bad_cursor = MagicMock()
+    bad_cursor.execute.side_effect = oracledb.Error("ORA-00942: table or view does not exist")
+    bad_conn = MagicMock()
+    bad_conn.cursor.return_value = bad_cursor
+    mock_conn_fn.return_value = bad_conn
+
+    with pytest.raises(oracledb.Error, match="ORA-00942"):
+        db_module.execute_query("SELECT * FROM missing_table")
+    # Only one connection acquired – no retry
+    assert mock_conn_fn.call_count == 1
