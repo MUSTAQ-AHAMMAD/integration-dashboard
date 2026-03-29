@@ -24,7 +24,7 @@
 
   <!-- KPI Cards -->
   <div class="row g-4 mb-4" id="kpi-cards">
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-1">
       <div class="kpi-card kpi-total">
         <div class="kpi-icon">
           <i class="bi bi-grid-3x3-gap-fill"></i>
@@ -36,7 +36,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-2">
       <div class="kpi-card kpi-running">
         <div class="kpi-icon">
           <i class="bi bi-play-circle-fill"></i>
@@ -48,7 +48,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-3">
       <div class="kpi-card kpi-stopped">
         <div class="kpi-icon">
           <i class="bi bi-pause-circle-fill"></i>
@@ -60,7 +60,7 @@
         <div class="kpi-glow"></div>
       </div>
     </div>
-    <div class="col-sm-6 col-xl-3">
+    <div class="col-sm-6 col-xl-3 animate-in animate-in-delay-4">
       <div class="kpi-card kpi-error">
         <div class="kpi-icon">
           <i class="bi bi-exclamation-triangle-fill"></i>
@@ -76,30 +76,32 @@
 
   <!-- Charts Row -->
   <div class="row g-4 mb-4">
-    <div class="col-lg-5">
+    <div class="col-lg-5 animate-in animate-in-delay-3">
       <div class="glass-card h-100">
         <div class="glass-card-header">
           <i class="bi bi-pie-chart-fill me-2"></i>Overall Status Distribution
         </div>
-        <div class="glass-card-body d-flex align-items-center justify-content-center">
-          <canvas id="statusPieChart"></canvas>
+        <div class="glass-card-body d-flex align-items-center justify-content-center" id="pie-chart-container">
+          <div class="skeleton skeleton-chart" id="pie-skeleton"></div>
+          <canvas id="statusPieChart" style="display:none"></canvas>
         </div>
       </div>
     </div>
-    <div class="col-lg-7">
+    <div class="col-lg-7 animate-in animate-in-delay-4">
       <div class="glass-card h-100">
         <div class="glass-card-header">
           <i class="bi bi-bar-chart-fill me-2"></i>Region-wise Integration Status
         </div>
-        <div class="glass-card-body">
-          <canvas id="regionBarChart"></canvas>
+        <div class="glass-card-body" id="bar-chart-container">
+          <div class="skeleton skeleton-chart" id="bar-skeleton"></div>
+          <canvas id="regionBarChart" style="display:none"></canvas>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Table Error Summary -->
-  <div class="row g-4 mb-4">
+  <div class="row g-4 mb-4 animate-in animate-in-delay-5">
     <div class="col-12">
       <div class="glass-card">
         <div class="glass-card-header">
@@ -114,7 +116,11 @@
                   <th>Status Breakdown</th>
                 </tr>
               </thead>
-              <tbody></tbody>
+              <tbody>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="2"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div></div></td></tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -123,12 +129,18 @@
   </div>
 
   <!-- Integration Status Detail Table -->
-  <div class="row g-4 mb-4">
+  <div class="row g-4 mb-4 animate-in animate-in-delay-6">
     <div class="col-12">
       <div class="glass-card">
-        <div class="glass-card-header d-flex align-items-center justify-content-between">
+        <div class="glass-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
           <span><i class="bi bi-list-check me-2"></i>Integration Running Status</span>
-          <span class="header-badge" id="status-count"></span>
+          <div class="d-flex align-items-center gap-3">
+            <div class="search-bar">
+              <i class="bi bi-search search-icon"></i>
+              <input type="text" id="status-search" placeholder="Filter by region, name, or status&hellip;" autocomplete="off">
+            </div>
+            <span class="header-badge" id="status-count"></span>
+          </div>
         </div>
         <div class="glass-card-body p-0">
           <div class="table-responsive">
@@ -143,7 +155,11 @@
                   <th>Updated At</th>
                 </tr>
               </thead>
-              <tbody></tbody>
+              <tbody>
+                <tr class="skeleton-placeholder"><td colspan="6"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="6"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
+                <tr class="skeleton-placeholder"><td colspan="6"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:2"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
+              </tbody>
             </table>
           </div>
         </div>
@@ -152,6 +168,14 @@
   </div>
 
 </div>
+
+<!-- Footer -->
+<footer class="dashboard-footer">
+  <span>Integration Command Center &copy; {{ current_year }} &middot; Powered by Flask &amp; Chart.js</span>
+</footer>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
 
 <!-- store refresh interval from server config -->
 <script>window.REFRESH_INTERVAL = {{ refresh_interval }};</script>
