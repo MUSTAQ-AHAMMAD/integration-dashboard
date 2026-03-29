@@ -63,7 +63,6 @@ def _create_pool():
         "dsn": _dsn(),
         "min": 1,
         "max": 5,
-        "increment": 1,
     }
     if _app_config.get("mode", "").upper() == "SYSDBA":
         kwargs["mode"] = oracledb.AUTH_MODE_SYSDBA
