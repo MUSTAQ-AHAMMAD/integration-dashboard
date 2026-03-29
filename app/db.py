@@ -137,7 +137,7 @@ def get_connection():
                     "All %d reconnect attempts exhausted for %s",
                     _MAX_RECONNECT_ATTEMPTS, _dsn_label(),
                 )
-    raise last_exc
+    raise last_exc  # pragma: no cover – only reachable when all retries fail
 
 
 def _run_query(conn, query, params):
