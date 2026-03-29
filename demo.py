@@ -50,6 +50,68 @@ for _t in TABLE_NAMES:
     _demo_table_errors.append({"table": _t, "status_counts": _counts})
 
 
+_demo_management_report = {
+    "IBRAQ": [
+        {
+            "integration_type": "IBRAQ",
+            "country": "KSA",
+            "completed_date": "2026-02-11",
+            "current_date": "2026-02-12",
+            "is_running": "No",
+            "reason": "Need to correct 2 & 5 ,6 Feb missing data. Waiting for data sync",
+            "expected_date": "30-Apr",
+        },
+        {
+            "integration_type": "IBRAQ",
+            "country": "UAE",
+            "completed_date": "2026-03-18",
+            "current_date": "2026-03-19",
+            "is_running": "NO",
+            "reason": "Waiting for finance to fix negative",
+            "expected_date": "31-Mar",
+        },
+        {
+            "integration_type": "IBRAQ",
+            "country": "OMAN",
+            "completed_date": "2026-03-18",
+            "current_date": "2026-03-19",
+            "is_running": "No",
+            "reason": "Waiting for finance to fix negative",
+            "expected_date": "31-Mar",
+        },
+        {
+            "integration_type": "IBRAQ",
+            "country": "KWT",
+            "completed_date": "2026-03-25",
+            "current_date": "2026-03-26",
+            "is_running": "No",
+            "reason": "",
+            "expected_date": "Up to Date",
+        },
+        {
+            "integration_type": "IBRAQ",
+            "country": "BH",
+            "completed_date": "2026-03-20",
+            "current_date": "2026-03-21",
+            "is_running": "YES",
+            "reason": "",
+            "expected_date": "31-Mar",
+        },
+    ],
+    "MATCH": [
+        {
+            "integration_type": "MATCH",
+            "country": "KSA",
+            "completed_date": "2026-03-14",
+            "current_date": "2026-03-15",
+            "is_running": "YES",
+            "reason": "High volume of transaction processing. Done for 26 Mar also",
+            "expected_date": "3-Apr",
+        },
+    ],
+}
+
+
 def _kpis():
     total = len(_demo_integration_status)
     running = sum(1 for r in _demo_integration_status if r["status"] == "running")
@@ -74,7 +136,8 @@ with patch("app.queries.get_integration_status", return_value=_demo_integration_
      patch("app.queries.get_overall_kpis", side_effect=lambda: _kpis()), \
      patch("app.queries.get_region_summary", side_effect=lambda: _region_summary()), \
      patch("app.queries.get_table_error_summary", return_value=_demo_table_errors), \
-     patch("app.queries.get_table_errors", return_value=[]):
+     patch("app.queries.get_table_errors", return_value=[]), \
+     patch("app.queries.get_management_report", return_value=_demo_management_report):
 
     from app import create_app
 
