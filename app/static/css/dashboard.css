@@ -851,3 +851,103 @@ body::before {
   color: #b91c1c;
   font-weight: 400;
 }
+
+/* ── Navigation links ────────────────────────────────────────────────── */
+.nav-link-custom {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s var(--transition-smooth);
+  white-space: nowrap;
+}
+.nav-link-custom:hover {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+}
+.nav-link-custom.active {
+  color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.12);
+  font-weight: 600;
+}
+.nav-link-custom i { margin-right: 2px; }
+
+/* ── Login page ──────────────────────────────────────────────────────── */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 420px;
+}
+.login-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.login-header h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-top: 0.75rem;
+  color: var(--text-primary);
+}
+.login-logo {
+  width: 56px;
+  height: 56px;
+  background: var(--gradient-blue);
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.6rem;
+}
+.btn-login {
+  padding: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.login-card .form-control,
+.login-card .input-group-text {
+  background: var(--bg-primary);
+  border-color: var(--border-glass);
+  color: var(--text-primary);
+}
+.login-card .form-control:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.login-card .form-label {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ── Admin modal dark theme ──────────────────────────────────────────── */
+.modal-content.bg-dark .form-control,
+.modal-content.bg-dark .form-select {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+.modal-content.bg-dark .form-control:focus,
+.modal-content.bg-dark .form-select:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+.modal-content.bg-dark .form-label {
+  color: #cbd5e1;
+}
+.modal-content.bg-dark .form-check-label {
+  color: #cbd5e1;
+}
