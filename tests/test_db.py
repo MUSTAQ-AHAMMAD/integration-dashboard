@@ -262,6 +262,46 @@ def test_test_connection_failure(mock_conn_fn):
         db_module.test_connection()
 
 
+@patch("app.db._reset_pool")
+@patch("app.db.get_connection")
+def test_test_connection_retries_on_dpy4011(mock_conn_fn, mock_reset):
+    """test_connection should retry once when the query raises DPY-4011."""
+    # First connection: cursor.execute raises DPY-4011
+    bad_cursor = MagicMock()
+    bad_cursor.execute.side_effect = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    bad_conn = MagicMock()
+    bad_conn.cursor.return_value = bad_cursor
+
+    # Second connection (after retry): succeeds
+    good_cursor = MagicMock()
+    good_cursor.fetchone.return_value = (1,)
+    good_conn = MagicMock()
+    good_conn.cursor.return_value = good_cursor
+
+    mock_conn_fn.side_effect = [bad_conn, good_conn]
+
+    assert db_module.test_connection() is True
+    mock_reset.assert_called_once()
+    bad_conn.close.assert_called_once()
+    good_conn.close.assert_called_once()
+
+
+@patch("app.db.get_connection")
+def test_test_connection_no_retry_on_other_errors(mock_conn_fn):
+    """test_connection should NOT retry on non-DPY-4011 query errors."""
+    bad_cursor = MagicMock()
+    bad_cursor.execute.side_effect = oracledb.Error("ORA-00942: table or view does not exist")
+    bad_conn = MagicMock()
+    bad_conn.cursor.return_value = bad_cursor
+    mock_conn_fn.return_value = bad_conn
+
+    with pytest.raises(oracledb.Error, match="ORA-00942"):
+        db_module.test_connection()
+    assert mock_conn_fn.call_count == 1
+
+
 # ── close_pool ─────────────────────────────────────────────────────────
 def test_close_pool_closes_and_resets():
     """close_pool should close the pool and reset _pool to None."""
@@ -332,8 +372,9 @@ def test_create_pool_sets_ping_interval(mock_create):
 
 
 # ── get_connection retry on DPY-4011 ──────────────────────────────────
+@patch("app.db.time.sleep")
 @patch("app.db._create_pool")
-def test_get_connection_retries_on_dpy4011(mock_pool_fn):
+def test_get_connection_retries_on_dpy4011(mock_pool_fn, mock_sleep):
     """get_connection should reset the pool and retry on DPY-4011."""
     _make_app()
     bad_pool = MagicMock()
@@ -347,6 +388,48 @@ def test_get_connection_retries_on_dpy4011(mock_pool_fn):
     conn = db_module.get_connection()
     assert conn is good_pool.acquire.return_value
     assert mock_pool_fn.call_count == 2
+    mock_sleep.assert_called_once_with(1)  # first retry: delay = 1 * 1
+
+
+@patch("app.db.time.sleep")
+@patch("app.db._create_pool")
+def test_get_connection_retries_multiple_times_on_dpy4011(mock_pool_fn, mock_sleep):
+    """get_connection should retry up to _MAX_RECONNECT_ATTEMPTS times."""
+    _make_app()
+    bad_pool1 = MagicMock()
+    bad_pool2 = MagicMock()
+    good_pool = MagicMock()
+    dpy_err = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    bad_pool1.acquire.side_effect = dpy_err
+    bad_pool2.acquire.side_effect = dpy_err
+    mock_pool_fn.side_effect = [bad_pool1, bad_pool2, good_pool]
+
+    conn = db_module.get_connection()
+    assert conn is good_pool.acquire.return_value
+    assert mock_pool_fn.call_count == 3
+    # Backoff delays: attempt 0 → sleep(1), attempt 1 → sleep(2)
+    assert mock_sleep.call_args_list == [call(1), call(2)]
+
+
+@patch("app.db.time.sleep")
+@patch("app.db._create_pool")
+def test_get_connection_raises_after_all_retries_exhausted(mock_pool_fn, mock_sleep):
+    """get_connection should raise DPY-4011 after all retries are exhausted."""
+    _make_app()
+    dpy_err = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    bad_pool = MagicMock()
+    bad_pool.acquire.side_effect = dpy_err
+    mock_pool_fn.return_value = bad_pool
+
+    with pytest.raises(oracledb.Error, match="DPY-4011"):
+        db_module.get_connection()
+    # 1 initial + _MAX_RECONNECT_ATTEMPTS retries
+    assert mock_pool_fn.call_count == 1 + db_module._MAX_RECONNECT_ATTEMPTS
+    assert mock_sleep.call_count == db_module._MAX_RECONNECT_ATTEMPTS
 
 
 @patch("app.db._create_pool")
