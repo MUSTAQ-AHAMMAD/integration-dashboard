@@ -77,8 +77,12 @@ def load_users():
     """Read users from the JSON file."""
     if _users_file is None or not os.path.exists(_users_file):
         return []
-    with open(_users_file, "r") as f:
-        return json.load(f)
+    try:
+        with open(_users_file, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Corrupted users.json file, returning empty user list")
+        return []
 
 
 def save_users(users):

@@ -11,6 +11,7 @@ def app():
     test_config = {
         "TESTING": True,
         "SECRET_KEY": "test-secret",
+        "LOGIN_DISABLED": True,
         "DB_HOST": "localhost",
         "DB_PORT": "1521",
         "DB_SERVICE_NAME": "ORCL",

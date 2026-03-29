@@ -271,6 +271,7 @@ def api_delete_user(user_id):
 
 
 # ── New API routes (region-based reports) ──────────────────────────────
+# Public endpoints (no login required) – mirrors existing public API pattern
 @main_bp.route("/api/regions")
 def api_regions():
     """Return list of available regions."""
@@ -281,6 +282,7 @@ def api_regions():
         return jsonify({"error": "Database error: unable to fetch regions"}), 500
 
 
+# Public endpoint – matches existing /api/integration-status pattern
 @main_bp.route("/api/sales-integration-detail")
 def api_sales_integration_detail():
     """Return SALES_INTEGRATION_STATUS detail."""
