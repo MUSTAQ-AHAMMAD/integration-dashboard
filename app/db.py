@@ -16,6 +16,7 @@ def init_db(app):
         "service_name": app.config["DB_SERVICE_NAME"],
         "user": app.config["DB_USER"],
         "password": app.config["DB_PASSWORD"],
+        "mode": app.config.get("DB_MODE", ""),
     }
 
 
@@ -28,11 +29,14 @@ def get_connection():
         _app_config["port"],
         service_name=_app_config["service_name"],
     )
-    return oracledb.connect(
-        user=_app_config["user"],
-        password=_app_config["password"],
-        dsn=dsn,
-    )
+    kwargs = {
+        "user": _app_config["user"],
+        "password": _app_config["password"],
+        "dsn": dsn,
+    }
+    if _app_config.get("mode", "").upper() == "SYSDBA":
+        kwargs["mode"] = oracledb.AUTH_MODE_SYSDBA
+    return oracledb.connect(**kwargs)
 
 
 def execute_query(query, params=None):
