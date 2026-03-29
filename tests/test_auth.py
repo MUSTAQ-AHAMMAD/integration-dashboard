@@ -58,6 +58,14 @@ def test_login_page_renders(client):
     assert b"Sign in" in resp.data
 
 
+def test_login_page_shows_default_credentials(client):
+    """GET /login should show default admin credentials hint."""
+    resp = client.get("/login")
+    html = resp.data.decode()
+    assert "admin" in html
+    assert "admin123" in html
+
+
 def test_login_success(client):
     """POST /login with valid credentials redirects to dashboard."""
     resp = _login(client)
@@ -91,6 +99,12 @@ def test_logout(client):
 
 
 # ── Report pages require login ────────────────────────────────────────
+def test_management_dashboard_requires_login(client):
+    """GET /management should redirect when not logged in."""
+    resp = client.get("/management")
+    assert resp.status_code == 302
+
+
 def test_integration_report_requires_login(client):
     """GET /reports/integration should redirect when not logged in."""
     resp = client.get("/reports/integration")
@@ -101,6 +115,14 @@ def test_transaction_report_requires_login(client):
     """GET /reports/transactions should redirect when not logged in."""
     resp = client.get("/reports/transactions")
     assert resp.status_code == 302
+
+
+def test_management_dashboard_renders(client):
+    """GET /management should render when logged in."""
+    _login(client)
+    resp = client.get("/management")
+    assert resp.status_code == 200
+    assert b"Management Dashboard" in resp.data
 
 
 def test_integration_report_renders(client):

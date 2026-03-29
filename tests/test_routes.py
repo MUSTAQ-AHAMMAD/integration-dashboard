@@ -203,6 +203,14 @@ def test_dashboard_contains_management_report(client):
     assert "Management Report" in html
 
 
+def test_dashboard_contains_management_nav_link(client):
+    """The dashboard should have a navigation link to the management dashboard."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert "/management" in html
+    assert "Management" in html
+
+
 def test_dashboard_contains_current_year(client):
     """The dashboard footer should contain the current year."""
     import datetime
