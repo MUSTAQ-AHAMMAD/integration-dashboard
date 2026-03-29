@@ -108,13 +108,18 @@ function showToast(message, type) {
 async function refreshKPIs() {
   try {
     var res = await fetch("/api/kpis");
+    if (!res.ok) {
+      var err = await res.json();
+      showToast(err.error || "Failed to load KPIs", "error");
+      return;
+    }
     var data = await res.json();
     animateValue(document.getElementById("kpi-total"), data.total ?? 0);
     animateValue(document.getElementById("kpi-running"), data.running ?? 0);
     animateValue(document.getElementById("kpi-stopped"), data.stopped ?? 0);
     animateValue(document.getElementById("kpi-error"), data.error ?? 0);
   } catch (e) {
-    /* network error – keep previous values */
+    showToast("Network error: unable to load KPIs", "error");
   }
 }
 
@@ -122,6 +127,10 @@ async function refreshKPIs() {
 async function refreshPieChart() {
   try {
     var res = await fetch("/api/kpis");
+    if (!res.ok) {
+      showToast("Failed to load status chart", "error");
+      return;
+    }
     var data = await res.json();
 
     var labels = ["Running", "Stopped", "Error"];
@@ -179,7 +188,7 @@ async function refreshPieChart() {
       pieChart.update("none");
     }
   } catch (e) {
-    /* keep chart as-is */
+    /* keep chart as-is on network error */
   }
 }
 
@@ -187,6 +196,11 @@ async function refreshPieChart() {
 async function refreshBarChart() {
   try {
     var res = await fetch("/api/region-summary");
+    if (!res.ok) {
+      var err = await res.json();
+      showToast(err.error || "Failed to load region summary", "error");
+      return;
+    }
     var rows = await res.json();
 
     var labels = rows.map(function(r) { return r.region || "Unknown"; });
@@ -278,7 +292,7 @@ async function refreshBarChart() {
       barChart.update("none");
     }
   } catch (e) {
-    /* keep chart as-is */
+    showToast("Network error: unable to load region chart", "error");
   }
 }
 
@@ -286,6 +300,12 @@ async function refreshBarChart() {
 async function refreshTableErrors() {
   try {
     var res = await fetch("/api/table-errors");
+    if (!res.ok) {
+      var err = await res.json();
+      var tbody = document.querySelector("#table-error-summary tbody");
+      tbody.innerHTML = '<tr><td colspan="2"><div class="table-empty-state"><i class="bi bi-exclamation-triangle"></i>' + escapeHtml(err.error || "Database error") + '</div></td></tr>';
+      return;
+    }
     var tables = await res.json();
     var tbody = document.querySelector("#table-error-summary tbody");
     tbody.innerHTML = "";
@@ -306,7 +326,7 @@ async function refreshTableErrors() {
       tbody.appendChild(tr);
     });
   } catch (e) {
-    /* retain previous data */
+    showToast("Network error: unable to load table errors", "error");
   }
 }
 
@@ -314,10 +334,17 @@ async function refreshTableErrors() {
 async function refreshIntegrationStatus() {
   try {
     var res = await fetch("/api/integration-status");
+    if (!res.ok) {
+      var err = await res.json();
+      var tbody = document.querySelector("#integration-status-table tbody");
+      tbody.innerHTML = '<tr><td colspan="6"><div class="table-empty-state"><i class="bi bi-exclamation-triangle"></i>' + escapeHtml(err.error || "Database error") + '</div></td></tr>';
+      document.getElementById("status-count").textContent = "";
+      return;
+    }
     integrationRows = await res.json();
     renderIntegrationTable(integrationRows);
   } catch (e) {
-    /* retain previous data */
+    showToast("Network error: unable to load integration status", "error");
   }
 }
 
@@ -366,24 +393,66 @@ function renderIntegrationTable(rows) {
   });
 }
 
+/* ── Connection Banner ────────────────────────────────────────────── */
+function showConnectionBanner(message) {
+  var existing = document.getElementById("connection-banner");
+  if (existing) {
+    existing.querySelector(".connection-banner-text").textContent = message;
+    existing.style.display = "";
+    return;
+  }
+  var banner = document.createElement("div");
+  banner.id = "connection-banner";
+  banner.className = "connection-banner";
+  banner.innerHTML =
+    '<i class="bi bi-exclamation-triangle-fill me-2"></i>' +
+    '<span class="connection-banner-text">' + escapeHtml(message) + '</span>' +
+    '<span class="ms-2 small">Check your .env database settings and verify the database is reachable.</span>';
+  var container = document.querySelector(".container-fluid");
+  if (container) container.parentNode.insertBefore(banner, container);
+}
+
+function hideConnectionBanner() {
+  var banner = document.getElementById("connection-banner");
+  if (banner) banner.style.display = "none";
+}
+
 /* ── Orchestrator ────────────────────────────────────────────────── */
 async function refreshAll() {
   var el = document.getElementById("last-updated");
   el.textContent = "Refreshing\u2026";
   el.classList.add("refreshing");
 
-  await Promise.all([
-    refreshKPIs(),
-    refreshPieChart(),
-    refreshBarChart(),
-    refreshTableErrors(),
-    refreshIntegrationStatus(),
-  ]);
+  /* Check DB connectivity first */
+  var dbOk = true;
+  try {
+    var healthRes = await fetch("/api/health");
+    if (!healthRes.ok) {
+      var healthData = await healthRes.json();
+      showConnectionBanner(healthData.detail || "Unable to connect to the database");
+      dbOk = false;
+    } else {
+      hideConnectionBanner();
+    }
+  } catch (e) {
+    showConnectionBanner("Unable to reach the server");
+    dbOk = false;
+  }
+
+  if (dbOk) {
+    await Promise.all([
+      refreshKPIs(),
+      refreshPieChart(),
+      refreshBarChart(),
+      refreshTableErrors(),
+      refreshIntegrationStatus(),
+    ]);
+  }
 
   el.textContent = "Last updated: " + new Date().toLocaleTimeString();
   el.classList.remove("refreshing");
 
-  if (!isFirstLoad) {
+  if (!isFirstLoad && dbOk) {
     showToast("Dashboard data refreshed", "success");
   }
   isFirstLoad = false;
