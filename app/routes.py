@@ -112,12 +112,24 @@ def api_health():
         })
     except Exception as exc:
         logger.exception("Health check failed")
-        return jsonify({
+        error_str = str(exc)
+        error_response = {
             "status": "error",
             "database": "disconnected",
             "target": _dsn_label(),
-            "detail": str(exc),
-        }), 500
+            "detail": error_str,
+        }
+        if "DPY-4011" in error_str:
+            error_response["hint"] = (
+                "DPY-4011 indicates the database or network closed the "
+                "connection. Check your .env database settings and verify "
+                "the database is reachable."
+            )
+            error_response["help_url"] = (
+                "https://python-oracledb.readthedocs.io/en/latest/"
+                "user_guide/troubleshooting.html#dpy-4011"
+            )
+        return jsonify(error_response), 500
 
 
 # ── Auth routes ────────────────────────────────────────────────────────

@@ -9,6 +9,10 @@ _app_config = None
 
 # DPY-4011 is raised when the database or network closed the connection.
 _CONNECTION_CLOSED_PREFIX = "DPY-4011"
+_DPY4011_HELP_URL = (
+    "https://python-oracledb.readthedocs.io/en/latest/"
+    "user_guide/troubleshooting.html#dpy-4011"
+)
 
 # Retry settings for transient connection failures.  A fresh connection is
 # attempted up to ``_MAX_RECONNECT_ATTEMPTS`` times with a linearly
@@ -16,19 +20,46 @@ _CONNECTION_CLOSED_PREFIX = "DPY-4011"
 _MAX_RECONNECT_ATTEMPTS = 3
 _RECONNECT_BASE_DELAY = 1   # base delay in seconds (multiplied by attempt)
 
+# Required configuration keys that must be non-empty for a connection.
+_REQUIRED_CONFIG_KEYS = ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_SERVICE_NAME")
+
 
 def _is_connection_closed_error(exc):
     """Return ``True`` if *exc* indicates a closed / dead connection (DPY-4011)."""
     return _CONNECTION_CLOSED_PREFIX in str(exc)
 
 
+def _validate_config(app):
+    """Log warnings for missing or empty database configuration values.
+
+    Returns a list of configuration key names that are missing/empty.
+    """
+    missing = []
+    for key in _REQUIRED_CONFIG_KEYS:
+        value = app.config.get(key, "")
+        if not (value and str(value).strip()):
+            missing.append(key)
+    if missing:
+        logger.warning(
+            "Database configuration incomplete – the following settings "
+            "are missing or empty: %s.  Check your .env file "
+            "(see .env.example for reference).",
+            ", ".join(missing),
+        )
+    return missing
+
+
 def init_db(app):
     """Store app config for on-demand connections.
 
     No persistent pool is created.  Each request opens a fresh connection
-    and closes it when done.
+    and closes it when done.  At startup, configuration is validated and
+    a non-blocking connectivity probe is attempted so that problems are
+    surfaced early.
     """
     global _app_config
+
+    _validate_config(app)
 
     _app_config = {
         "host": app.config["DB_HOST"],
@@ -38,6 +69,28 @@ def init_db(app):
         "password": app.config["DB_PASSWORD"],
         "mode": app.config.get("DB_MODE", ""),
     }
+
+    # Non-blocking connectivity probe – log a clear message if the database
+    # is not reachable so the operator can fix the issue early.
+    # Skipped in test mode to avoid interfering with mocked connections.
+    if not app.config.get("TESTING"):
+        try:
+            conn = oracledb.connect(
+                user=_app_config["user"],
+                password=_app_config["password"],
+                dsn=_dsn(),
+                **({"mode": oracledb.AUTH_MODE_SYSDBA}
+                   if _app_config.get("mode", "").upper() == "SYSDBA" else {}),
+            )
+            conn.close()
+            logger.info("Startup DB probe succeeded – connected to %s", _dsn_label())
+        except Exception as exc:
+            logger.warning(
+                "Startup DB probe failed for %s: %s. "
+                "Check your .env database settings and verify the database "
+                "is reachable. Help: %s",
+                _dsn_label(), exc, _DPY4011_HELP_URL,
+            )
 
 
 def _dsn():
@@ -83,7 +136,10 @@ def get_connection():
         except oracledb.Error as exc:
             if not _is_connection_closed_error(exc):
                 logger.exception(
-                    "Failed to connect to %s", _dsn_label()
+                    "Failed to connect to %s. "
+                    "Check your .env database settings and verify "
+                    "the database is reachable.",
+                    _dsn_label(),
                 )
                 raise
             last_exc = exc
@@ -91,14 +147,18 @@ def get_connection():
                 delay = _RECONNECT_BASE_DELAY * (attempt + 1)
                 logger.warning(
                     "Connection failed (DPY-4011), retrying "
-                    "(attempt %d/%d, backoff %ds)",
+                    "(attempt %d/%d, backoff %ds). Help: %s",
                     attempt + 1, _MAX_RECONNECT_ATTEMPTS, delay,
+                    _DPY4011_HELP_URL,
                 )
                 time.sleep(delay)
             else:
                 logger.error(
-                    "All %d reconnect attempts exhausted for %s",
+                    "All %d reconnect attempts exhausted for %s. "
+                    "Check your .env database settings and verify "
+                    "the database is reachable. Help: %s",
                     _MAX_RECONNECT_ATTEMPTS, _dsn_label(),
+                    _DPY4011_HELP_URL,
                 )
     raise last_exc  # pragma: no cover – only reachable when all retries fail
 
@@ -126,7 +186,10 @@ def execute_query(query, params=None):
         return _run_query(conn, query, params)
     except oracledb.Error as exc:
         if _is_connection_closed_error(exc):
-            logger.warning("Connection lost during query (DPY-4011), retrying once")
+            logger.warning(
+                "Connection lost during query (DPY-4011), retrying once. "
+                "Help: %s", _DPY4011_HELP_URL,
+            )
             if conn is not None:
                 try:
                     conn.close()
@@ -138,7 +201,12 @@ def execute_query(query, params=None):
                 retry_conn = get_connection()
                 return _run_query(retry_conn, query, params)
             except oracledb.Error:
-                logger.exception("Retry query also failed")
+                logger.exception(
+                    "Retry query also failed. "
+                    "Check your .env database settings and verify "
+                    "the database is reachable. Help: %s",
+                    _DPY4011_HELP_URL,
+                )
                 raise
             finally:
                 if retry_conn is not None:
@@ -168,7 +236,10 @@ def test_connection():
     except oracledb.Error as exc:
         if not _is_connection_closed_error(exc):
             raise
-        logger.warning("Connection lost during health check (DPY-4011), retrying")
+        logger.warning(
+            "Connection lost during health check (DPY-4011), retrying. "
+            "Help: %s", _DPY4011_HELP_URL,
+        )
         if conn is not None:
             try:
                 conn.close()

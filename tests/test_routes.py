@@ -320,3 +320,31 @@ def test_api_health_db_error(mock_test, client):
     assert data["database"] == "disconnected"
     assert "detail" in data
     assert "target" in data
+
+
+@patch(
+    "app.routes.test_connection",
+    side_effect=oracledb.Error("DPY-4011: the database or network closed the connection"),
+)
+def test_api_health_dpy4011_includes_hint(mock_test, client):
+    """GET /api/health should include a hint and help_url for DPY-4011 errors."""
+    resp = client.get("/api/health")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["status"] == "error"
+    assert "hint" in data
+    assert "DPY-4011" in data["hint"]
+    assert ".env" in data["hint"]
+    assert "help_url" in data
+    assert "dpy-4011" in data["help_url"]
+
+
+@patch("app.routes.test_connection", side_effect=oracledb.Error("ORA-12541: TNS:no listener"))
+def test_api_health_non_dpy4011_no_hint(mock_test, client):
+    """GET /api/health should NOT include hint/help_url for non-DPY-4011 errors."""
+    resp = client.get("/api/health")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["status"] == "error"
+    assert "hint" not in data
+    assert "help_url" not in data
