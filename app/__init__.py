@@ -4,6 +4,7 @@ from flask import Flask
 
 from app.config import Config
 from app.db import init_db
+from app.oracle_client import init_oracle_client
 
 
 def create_app(config=None):
@@ -14,6 +15,9 @@ def create_app(config=None):
         app.config.from_object(Config)
     else:
         app.config.from_mapping(config)
+
+    # Initialise Oracle Thick mode before any database connections.
+    init_oracle_client(app.config)
 
     init_db(app)
 

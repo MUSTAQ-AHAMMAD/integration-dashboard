@@ -4,6 +4,8 @@ import time
 
 import oracledb
 
+from app.oracle_client import is_thick_mode
+
 logger = logging.getLogger(__name__)
 
 _app_config = None
@@ -32,6 +34,16 @@ _REQUIRED_CONFIG_KEYS = ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_SERVICE_NAME")
 def _is_connection_closed_error(exc):
     """Return ``True`` if *exc* indicates a closed / dead connection (DPY-4011)."""
     return _CONNECTION_CLOSED_PREFIX in str(exc)
+
+
+def _thick_mode_hint():
+    """Return a hint string if Thick mode is not active, else empty string."""
+    if is_thick_mode():
+        return ""
+    return (
+        " Tip: enable Oracle Thick mode by installing Oracle Instant "
+        "Client and setting ORACLE_CLIENT_PATH in your .env file."
+    )
 
 
 def _validate_config(app):
@@ -158,18 +170,18 @@ def get_connection():
                 delay = _RECONNECT_BASE_DELAY * (attempt + 1)
                 logger.warning(
                     "Connection failed (DPY-4011), retrying "
-                    "(attempt %d/%d, backoff %ds). Help: %s",
+                    "(attempt %d/%d, backoff %ds). Help: %s%s",
                     attempt + 1, _MAX_RECONNECT_ATTEMPTS, delay,
-                    _DPY4011_HELP_URL,
+                    _DPY4011_HELP_URL, _thick_mode_hint(),
                 )
                 time.sleep(delay)
             else:
                 logger.error(
                     "All %d reconnect attempts exhausted for %s. "
                     "Check your .env database settings and verify "
-                    "the database is reachable. Help: %s",
+                    "the database is reachable. Help: %s%s",
                     _MAX_RECONNECT_ATTEMPTS, _dsn_label(),
-                    _DPY4011_HELP_URL,
+                    _DPY4011_HELP_URL, _thick_mode_hint(),
                 )
     raise last_exc  # pragma: no cover – only reachable when all retries fail
 
@@ -199,7 +211,7 @@ def execute_query(query, params=None):
         if _is_connection_closed_error(exc):
             logger.warning(
                 "Connection lost during query (DPY-4011), retrying once. "
-                "Help: %s", _DPY4011_HELP_URL,
+                "Help: %s%s", _DPY4011_HELP_URL, _thick_mode_hint(),
             )
             if conn is not None:
                 try:
@@ -249,7 +261,7 @@ def test_connection():
             raise
         logger.warning(
             "Connection lost during health check (DPY-4011), retrying. "
-            "Help: %s", _DPY4011_HELP_URL,
+            "Help: %s%s", _DPY4011_HELP_URL, _thick_mode_hint(),
         )
         if conn is not None:
             try:
