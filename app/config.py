@@ -19,4 +19,8 @@ class Config:
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_MODE = os.getenv("DB_MODE", "")
 
+    # Oracle Instant Client path for Thick mode (needed for NNE / SYSDBA).
+    # Leave empty to auto-detect via ORACLE_HOME or system search paths.
+    ORACLE_CLIENT_PATH = os.getenv("ORACLE_CLIENT_PATH", "")
+
     REFRESH_INTERVAL = int(os.getenv("REFRESH_INTERVAL", "30"))
