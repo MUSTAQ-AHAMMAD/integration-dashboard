@@ -469,3 +469,111 @@ def test_dpy4011_help_url_is_defined():
     """The module should expose the troubleshooting URL."""
     assert "troubleshooting" in db_module._DPY4011_HELP_URL
     assert "dpy-4011" in db_module._DPY4011_HELP_URL
+
+
+# ── connection resilience constants ───────────────────────────────────
+def test_tcp_connect_timeout_is_defined():
+    """The module should expose a TCP connect timeout."""
+    assert db_module._TCP_CONNECT_TIMEOUT > 0
+
+
+def test_expire_time_is_defined():
+    """The module should expose an expire_time for keep-alive."""
+    assert db_module._EXPIRE_TIME > 0
+
+
+@patch("app.db.oracledb.connect")
+def test_get_connection_passes_resilience_params(mock_connect):
+    """get_connection should pass tcp_connect_timeout, expire_time, and disable_oob."""
+    _make_app()
+    db_module.get_connection()
+    kwargs = mock_connect.call_args[1]
+    assert kwargs["tcp_connect_timeout"] == db_module._TCP_CONNECT_TIMEOUT
+    assert kwargs["expire_time"] == db_module._EXPIRE_TIME
+    assert kwargs["disable_oob"] is True
+
+
+# ── _tcp_ping ─────────────────────────────────────────────────────────
+@patch("app.db.socket.create_connection")
+def test_tcp_ping_returns_true_on_success(mock_sock):
+    """_tcp_ping should return True when the socket connects."""
+    mock_sock.return_value.__enter__ = MagicMock()
+    mock_sock.return_value.__exit__ = MagicMock(return_value=False)
+    assert db_module._tcp_ping("localhost", 1521) is True
+
+
+@patch("app.db.socket.create_connection", side_effect=OSError("refused"))
+def test_tcp_ping_returns_false_on_failure(mock_sock):
+    """_tcp_ping should return False when the socket fails."""
+    assert db_module._tcp_ping("localhost", 1521) is False
+
+
+# ── check_connectivity ────────────────────────────────────────────────
+def test_check_connectivity_before_init():
+    """check_connectivity should report config failure when init_db not called."""
+    result = db_module.check_connectivity()
+    assert result["ok"] is False
+    assert result["steps"][0]["name"] == "config"
+    assert result["steps"][0]["status"] == "fail"
+
+
+@patch("app.db.get_connection")
+@patch("app.db._tcp_ping", return_value=True)
+def test_check_connectivity_all_ok(mock_tcp, mock_conn_fn):
+    """check_connectivity should report all steps ok when everything works."""
+    _make_app()
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.return_value = (1,)
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    mock_conn_fn.return_value = mock_conn
+
+    result = db_module.check_connectivity()
+    assert result["ok"] is True
+    assert len(result["steps"]) == 3
+    assert all(s["status"] == "ok" for s in result["steps"])
+
+
+@patch("app.db._tcp_ping", return_value=False)
+def test_check_connectivity_tcp_fail(mock_tcp):
+    """check_connectivity should stop at TCP step when host is unreachable."""
+    _make_app()
+    result = db_module.check_connectivity()
+    assert result["ok"] is False
+    assert len(result["steps"]) == 1
+    assert result["steps"][0]["name"] == "tcp"
+    assert result["steps"][0]["status"] == "fail"
+
+
+@patch("app.db.get_connection", side_effect=oracledb.Error("DPY-4011: connection closed"))
+@patch("app.db._tcp_ping", return_value=True)
+def test_check_connectivity_auth_fail(mock_tcp, mock_conn_fn):
+    """check_connectivity should stop at auth step when connection fails."""
+    _make_app()
+    result = db_module.check_connectivity()
+    assert result["ok"] is False
+    assert len(result["steps"]) == 2
+    assert result["steps"][0]["status"] == "ok"  # TCP ok
+    assert result["steps"][1]["name"] == "auth"
+    assert result["steps"][1]["status"] == "fail"
+    assert "DPY-4011" in result["steps"][1]["detail"]
+
+
+@patch("app.db.get_connection")
+@patch("app.db._tcp_ping", return_value=True)
+def test_check_connectivity_query_fail(mock_tcp, mock_conn_fn):
+    """check_connectivity should report query failure when SELECT fails."""
+    _make_app()
+    mock_cursor = MagicMock()
+    mock_cursor.execute.side_effect = oracledb.Error("ORA-00942: table or view does not exist")
+    mock_conn = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    mock_conn_fn.return_value = mock_conn
+
+    result = db_module.check_connectivity()
+    assert result["ok"] is False
+    assert len(result["steps"]) == 3
+    assert result["steps"][0]["status"] == "ok"  # TCP ok
+    assert result["steps"][1]["status"] == "ok"  # auth ok
+    assert result["steps"][2]["name"] == "query"
+    assert result["steps"][2]["status"] == "fail"

@@ -7,7 +7,7 @@ import oracledb
 from flask import Blueprint, jsonify, render_template, current_app, request, redirect, url_for
 from flask_login import login_required, current_user, login_user, logout_user
 
-from app.db import get_connection, test_connection, _dsn_label
+from app.db import get_connection, test_connection, check_connectivity, _dsn_label
 from app.queries import (
     get_integration_status,
     get_management_report,
@@ -102,34 +102,38 @@ def api_management_report():
 # ── Health check endpoint ──────────────────────────────────────────────
 @main_bp.route("/api/health")
 def api_health():
-    """Check database connectivity by running a real query."""
-    try:
-        test_connection()
-        return jsonify({
-            "status": "ok",
-            "database": "connected",
-            "target": _dsn_label(),
-        })
-    except Exception as exc:
-        logger.exception("Health check failed")
-        error_str = str(exc)
-        error_response = {
-            "status": "error",
-            "database": "disconnected",
-            "target": _dsn_label(),
-            "detail": error_str,
-        }
-        if "DPY-4011" in error_str:
-            error_response["hint"] = (
+    """Check database connectivity with step-by-step diagnostics.
+
+    Returns a JSON object with ``status``, ``database``, ``target``,
+    and a ``checks`` list showing the result of each connectivity step
+    (TCP reachability → Oracle authentication → query execution).
+    """
+    result = check_connectivity()
+    status_code = 200 if result["ok"] else 500
+
+    response = {
+        "status": "ok" if result["ok"] else "error",
+        "database": "connected" if result["ok"] else "disconnected",
+        "target": _dsn_label(),
+        "checks": result["steps"],
+    }
+
+    if not result["ok"]:
+        logger.warning("Health check failed: %s", result["steps"])
+        # Check if any step detail mentions DPY-4011
+        details = " ".join(s.get("detail", "") for s in result["steps"])
+        if "DPY-4011" in details:
+            response["hint"] = (
                 "DPY-4011 indicates the database or network closed the "
                 "connection. Check your .env database settings and verify "
                 "the database is reachable."
             )
-            error_response["help_url"] = (
+            response["help_url"] = (
                 "https://python-oracledb.readthedocs.io/en/latest/"
                 "user_guide/troubleshooting.html#dpy-4011"
             )
-        return jsonify(error_response), 500
+
+    return jsonify(response), status_code
 
 
 # ── Auth routes ────────────────────────────────────────────────────────
