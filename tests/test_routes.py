@@ -299,35 +299,60 @@ def test_api_management_report_returns_500_on_db_error(mock_report, client):
 
 
 # ── Health check endpoint ─────────────────────────────────────────────
-@patch("app.routes.test_connection", return_value=True)
-def test_api_health_ok(mock_test, client):
+@patch("app.routes.check_connectivity")
+def test_api_health_ok(mock_check, client):
     """GET /api/health should return 200 when DB is reachable."""
+    mock_check.return_value = {
+        "ok": True,
+        "steps": [
+            {"name": "tcp", "status": "ok", "detail": "TCP connection succeeded"},
+            {"name": "auth", "status": "ok", "detail": "Authenticated"},
+            {"name": "query", "status": "ok", "detail": "SELECT 1 FROM DUAL returned successfully"},
+        ],
+    }
     resp = client.get("/api/health")
     assert resp.status_code == 200
     data = resp.get_json()
     assert data["status"] == "ok"
     assert data["database"] == "connected"
     assert "target" in data
+    assert "checks" in data
+    assert len(data["checks"]) == 3
 
 
-@patch("app.routes.test_connection", side_effect=oracledb.Error("connection refused"))
-def test_api_health_db_error(mock_test, client):
+@patch("app.routes.check_connectivity")
+def test_api_health_db_error(mock_check, client):
     """GET /api/health should return 500 when DB is unreachable."""
+    mock_check.return_value = {
+        "ok": False,
+        "steps": [
+            {"name": "tcp", "status": "ok", "detail": "TCP connection succeeded"},
+            {"name": "auth", "status": "fail", "detail": "connection refused"},
+        ],
+    }
     resp = client.get("/api/health")
     assert resp.status_code == 500
     data = resp.get_json()
     assert data["status"] == "error"
     assert data["database"] == "disconnected"
-    assert "detail" in data
+    assert "checks" in data
     assert "target" in data
 
 
-@patch(
-    "app.routes.test_connection",
-    side_effect=oracledb.Error("DPY-4011: the database or network closed the connection"),
-)
-def test_api_health_dpy4011_includes_hint(mock_test, client):
+@patch("app.routes.check_connectivity")
+def test_api_health_dpy4011_includes_hint(mock_check, client):
     """GET /api/health should include a hint and help_url for DPY-4011 errors."""
+    mock_check.return_value = {
+        "ok": False,
+        "steps": [
+            {"name": "tcp", "status": "ok", "detail": "TCP connection succeeded"},
+            {
+                "name": "auth",
+                "status": "fail",
+                "detail": "DPY-4011: the database or network closed the connection",
+            },
+        ],
+    }
     resp = client.get("/api/health")
     assert resp.status_code == 500
     data = resp.get_json()
@@ -339,12 +364,40 @@ def test_api_health_dpy4011_includes_hint(mock_test, client):
     assert "dpy-4011" in data["help_url"]
 
 
-@patch("app.routes.test_connection", side_effect=oracledb.Error("ORA-12541: TNS:no listener"))
-def test_api_health_non_dpy4011_no_hint(mock_test, client):
+@patch("app.routes.check_connectivity")
+def test_api_health_non_dpy4011_no_hint(mock_check, client):
     """GET /api/health should NOT include hint/help_url for non-DPY-4011 errors."""
+    mock_check.return_value = {
+        "ok": False,
+        "steps": [
+            {"name": "tcp", "status": "fail", "detail": "TCP connection failed"},
+        ],
+    }
     resp = client.get("/api/health")
     assert resp.status_code == 500
     data = resp.get_json()
     assert data["status"] == "error"
     assert "hint" not in data
     assert "help_url" not in data
+
+
+@patch("app.routes.check_connectivity")
+def test_api_health_tcp_fail(mock_check, client):
+    """GET /api/health should clearly report TCP-level failure."""
+    mock_check.return_value = {
+        "ok": False,
+        "steps": [
+            {
+                "name": "tcp",
+                "status": "fail",
+                "detail": "TCP connection to localhost:1521 failed – host may be unreachable or port blocked",
+            },
+        ],
+    }
+    resp = client.get("/api/health")
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert data["status"] == "error"
+    assert data["database"] == "disconnected"
+    assert data["checks"][0]["name"] == "tcp"
+    assert data["checks"][0]["status"] == "fail"

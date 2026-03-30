@@ -1,4 +1,5 @@
 import logging
+import socket
 import time
 
 import oracledb
@@ -19,6 +20,10 @@ _DPY4011_HELP_URL = (
 # increasing delay.
 _MAX_RECONNECT_ATTEMPTS = 3
 _RECONNECT_BASE_DELAY = 1   # base delay in seconds (multiplied by attempt)
+
+# Connection resilience parameters to prevent / mitigate DPY-4011 errors.
+_TCP_CONNECT_TIMEOUT = 15   # seconds – abort if TCP handshake is not done
+_EXPIRE_TIME = 2            # minutes – TCP keep-alive interval (detects dead links)
 
 # Required configuration keys that must be non-empty for a connection.
 _REQUIRED_CONFIG_KEYS = ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_SERVICE_NAME")
@@ -79,6 +84,9 @@ def init_db(app):
                 user=_app_config["user"],
                 password=_app_config["password"],
                 dsn=_dsn(),
+                tcp_connect_timeout=_TCP_CONNECT_TIMEOUT,
+                expire_time=_EXPIRE_TIME,
+                disable_oob=True,
                 **({"mode": oracledb.AUTH_MODE_SYSDBA}
                    if _app_config.get("mode", "").upper() == "SYSDBA" else {}),
             )
@@ -123,6 +131,9 @@ def get_connection():
         "user": _app_config["user"],
         "password": _app_config["password"],
         "dsn": _dsn(),
+        "tcp_connect_timeout": _TCP_CONNECT_TIMEOUT,
+        "expire_time": _EXPIRE_TIME,
+        "disable_oob": True,
     }
     if _app_config.get("mode", "").upper() == "SYSDBA":
         kwargs["mode"] = oracledb.AUTH_MODE_SYSDBA
@@ -254,3 +265,97 @@ def test_connection():
     finally:
         if conn is not None:
             conn.close()
+
+
+def _tcp_ping(host, port, timeout=5):
+    """Return ``True`` if a TCP connection to *host*:*port* succeeds."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def check_connectivity():
+    """Run a multi-step connectivity check and return a diagnostic dict.
+
+    Steps:
+      1. TCP socket check – is the host:port reachable?
+      2. Oracle connect – can we authenticate?
+      3. Query – does ``SELECT 1 FROM DUAL`` succeed?
+
+    The returned dict always contains ``"ok"`` (bool) and ``"steps"``
+    (a list of ``{"name", "status", "detail"}`` dicts).
+    """
+    if _app_config is None:
+        return {
+            "ok": False,
+            "steps": [
+                {
+                    "name": "config",
+                    "status": "fail",
+                    "detail": "Database not initialised. Call init_db(app) first.",
+                }
+            ],
+        }
+
+    steps = []
+    host = _app_config["host"]
+    port = _app_config["port"]
+
+    # Step 1 – TCP reachability
+    tcp_ok = _tcp_ping(host, port)
+    steps.append({
+        "name": "tcp",
+        "status": "ok" if tcp_ok else "fail",
+        "detail": (
+            f"TCP connection to {host}:{port} succeeded"
+            if tcp_ok
+            else f"TCP connection to {host}:{port} failed – host may be "
+                 "unreachable or port blocked"
+        ),
+    })
+    if not tcp_ok:
+        return {"ok": False, "steps": steps}
+
+    # Step 2 – Oracle connect
+    conn = None
+    try:
+        conn = get_connection()
+        steps.append({
+            "name": "auth",
+            "status": "ok",
+            "detail": f"Authenticated as {_app_config['user']}",
+        })
+    except Exception as exc:
+        steps.append({
+            "name": "auth",
+            "status": "fail",
+            "detail": str(exc),
+        })
+        return {"ok": False, "steps": steps}
+
+    # Step 3 – query
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM DUAL")
+        cursor.fetchone()
+        steps.append({
+            "name": "query",
+            "status": "ok",
+            "detail": "SELECT 1 FROM DUAL returned successfully",
+        })
+        return {"ok": True, "steps": steps}
+    except Exception as exc:
+        steps.append({
+            "name": "query",
+            "status": "fail",
+            "detail": str(exc),
+        })
+        return {"ok": False, "steps": steps}
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except oracledb.Error:
+                pass
