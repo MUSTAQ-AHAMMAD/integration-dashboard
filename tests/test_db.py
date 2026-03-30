@@ -385,3 +385,87 @@ def test_execute_query_no_retry_on_other_errors(mock_conn_fn):
         db_module.execute_query("SELECT * FROM missing_table")
     # Only one connection acquired – no retry
     assert mock_conn_fn.call_count == 1
+
+
+# ── _validate_config ──────────────────────────────────────────────────
+def test_validate_config_returns_empty_when_all_present():
+    """_validate_config should return an empty list when all required keys are set."""
+    app = _make_app()
+    missing = db_module._validate_config(app)
+    assert missing == []
+
+
+def test_validate_config_detects_empty_db_user():
+    """_validate_config should flag DB_USER when it is empty."""
+    app = _make_app(DB_USER="")
+    missing = db_module._validate_config(app)
+    assert "DB_USER" in missing
+
+
+def test_validate_config_detects_empty_db_password():
+    """_validate_config should flag DB_PASSWORD when it is empty."""
+    app = _make_app(DB_PASSWORD="")
+    missing = db_module._validate_config(app)
+    assert "DB_PASSWORD" in missing
+
+
+def test_validate_config_detects_multiple_missing_keys():
+    """_validate_config should flag all missing keys at once."""
+    app = _make_app(DB_USER="", DB_PASSWORD="", DB_HOST="")
+    missing = db_module._validate_config(app)
+    assert "DB_USER" in missing
+    assert "DB_PASSWORD" in missing
+    assert "DB_HOST" in missing
+
+
+# ── startup probe ─────────────────────────────────────────────────────
+@patch("app.db.oracledb.connect")
+def test_init_db_startup_probe_runs_when_not_testing(mock_connect):
+    """init_db should attempt a connectivity probe when TESTING is not set."""
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+    cfg = {
+        "SECRET_KEY": "test-secret",
+        "DB_HOST": "dbhost.example.com",
+        "DB_PORT": "1521",
+        "DB_SERVICE_NAME": "TESTDB",
+        "DB_USER": "app_user",
+        "DB_PASSWORD": "secret",
+        "DB_MODE": "",
+        "REFRESH_INTERVAL": 10,
+    }
+    create_app(config=cfg)
+    mock_connect.assert_called_once()
+    mock_conn.close.assert_called_once()
+
+
+@patch("app.db.oracledb.connect")
+def test_init_db_startup_probe_skipped_in_testing(mock_connect):
+    """init_db should skip the connectivity probe in TESTING mode."""
+    _make_app()  # TESTING=True by default in _make_app
+    mock_connect.assert_not_called()
+
+
+@patch("app.db.oracledb.connect", side_effect=oracledb.Error("DPY-4011: connection closed"))
+def test_init_db_startup_probe_failure_does_not_raise(mock_connect):
+    """init_db should log a warning but NOT raise on probe failure."""
+    cfg = {
+        "SECRET_KEY": "test-secret",
+        "DB_HOST": "dbhost.example.com",
+        "DB_PORT": "1521",
+        "DB_SERVICE_NAME": "TESTDB",
+        "DB_USER": "app_user",
+        "DB_PASSWORD": "secret",
+        "DB_MODE": "",
+        "REFRESH_INTERVAL": 10,
+    }
+    # Should not raise – the probe is non-blocking
+    app = create_app(config=cfg)
+    assert app is not None
+
+
+# ── DPY-4011 help URL in module constants ─────────────────────────────
+def test_dpy4011_help_url_is_defined():
+    """The module should expose the troubleshooting URL."""
+    assert "troubleshooting" in db_module._DPY4011_HELP_URL
+    assert "dpy-4011" in db_module._DPY4011_HELP_URL
