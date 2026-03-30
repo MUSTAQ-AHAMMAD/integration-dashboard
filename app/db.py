@@ -37,7 +37,7 @@ def _validate_config(app):
     missing = []
     for key in _REQUIRED_CONFIG_KEYS:
         value = app.config.get(key, "")
-        if not value or not str(value).strip():
+        if not (value and str(value).strip()):
             missing.append(key)
     if missing:
         logger.warning(
