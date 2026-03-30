@@ -20,10 +20,10 @@
     {% if current_user.role == 'admin' %}
     <a href="{{ url_for('main.admin_users') }}" class="nav-link-custom"><i class="bi bi-people"></i> Users</a>
     {% endif %}
-    <span class="live-indicator">
-      <span class="live-dot"></span> LIVE
-    </span>
-    <span class="text-muted small" id="last-updated">Loading&hellip;</span>
+    <button class="btn-refresh" id="refresh-btn" title="Refresh dashboard data">
+      <i class="bi bi-arrow-clockwise" id="refresh-icon"></i> Refresh
+    </button>
+    <span class="text-muted small" id="last-updated">Click Refresh to load data</span>
     <a href="{{ url_for('main.logout') }}" class="nav-link-custom" title="Logout"><i class="bi bi-box-arrow-right"></i></a>
   </div>
 </nav>

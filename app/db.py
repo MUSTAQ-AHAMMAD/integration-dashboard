@@ -6,17 +6,15 @@ import oracledb
 logger = logging.getLogger(__name__)
 
 _app_config = None
-_pool = None
 
 # DPY-4011 is raised when the database or network closed the connection.
 _CONNECTION_CLOSED_PREFIX = "DPY-4011"
 
-# Retry settings for stale-connection recovery.  The pool is reset and
-# a fresh connection is attempted up to ``_MAX_RECONNECT_ATTEMPTS`` times
-# with an exponentially increasing delay capped at ``_RECONNECT_MAX_DELAY``.
-_MAX_RECONNECT_ATTEMPTS = 5
-_RECONNECT_BASE_DELAY = 2   # base delay in seconds (doubles each attempt)
-_RECONNECT_MAX_DELAY = 32   # cap per-retry delay at this many seconds
+# Retry settings for transient connection failures.  A fresh connection is
+# attempted up to ``_MAX_RECONNECT_ATTEMPTS`` times with a linearly
+# increasing delay.
+_MAX_RECONNECT_ATTEMPTS = 3
+_RECONNECT_BASE_DELAY = 1   # base delay in seconds (multiplied by attempt)
 
 
 def _is_connection_closed_error(exc):
@@ -24,32 +22,13 @@ def _is_connection_closed_error(exc):
     return _CONNECTION_CLOSED_PREFIX in str(exc)
 
 
-def _reset_pool():
-    """Destroy the current pool so the next call to ``_create_pool`` rebuilds it."""
-    global _pool
-    if _pool is not None:
-        try:
-            _pool.close(force=True)
-        except oracledb.Error:
-            pass
-        _pool = None
-        logger.info("Connection pool reset for %s", _dsn_label())
-
-
 def init_db(app):
-    """Store app config and reset any existing pool.
+    """Store app config for on-demand connections.
 
-    The connection pool is created lazily on first use so the application
-    can start even when the database is temporarily unavailable.
+    No persistent pool is created.  Each request opens a fresh connection
+    and closes it when done.
     """
-    global _app_config, _pool
-    # Shut down a previous pool (e.g. when tests re-initialise the app)
-    if _pool is not None:
-        try:
-            _pool.close(force=True)
-        except oracledb.Error:
-            pass
-        _pool = None
+    global _app_config
 
     _app_config = {
         "host": app.config["DB_HOST"],
@@ -76,12 +55,14 @@ def _dsn_label():
     return f"{_app_config['user']}@{_dsn()}"
 
 
-def _create_pool():
-    """Create (or return the existing) connection pool – lazy init."""
-    global _pool
-    if _pool is not None:
-        return _pool
+def get_connection():
+    """Create a new standalone connection to the database.
 
+    If the attempt fails with a closed-connection error (DPY-4011)
+    it is retried up to ``_MAX_RECONNECT_ATTEMPTS`` times with a
+    linearly increasing delay.  The caller is responsible for closing
+    the returned connection.
+    """
     if _app_config is None:
         raise RuntimeError("Database not initialised. Call init_db(app) first.")
 
@@ -89,54 +70,30 @@ def _create_pool():
         "user": _app_config["user"],
         "password": _app_config["password"],
         "dsn": _dsn(),
-        "min": 1,
-        "max": 5,
-        "ping_interval": 0,
-        "timeout": 300,  # close idle connections after 5 minutes
     }
     if _app_config.get("mode", "").upper() == "SYSDBA":
         kwargs["mode"] = oracledb.AUTH_MODE_SYSDBA
 
-    try:
-        _pool = oracledb.create_pool(**kwargs)
-        logger.info("Connection pool created for %s", _dsn_label())
-    except oracledb.Error:
-        logger.exception("Failed to create connection pool for %s", _dsn_label())
-        raise
-    return _pool
-
-
-def get_connection():
-    """Acquire a connection from the pool.
-
-    If the attempt fails with a closed-connection error (DPY-4011)
-    the pool is reset and retried up to ``_MAX_RECONNECT_ATTEMPTS`` times
-    with an exponentially increasing delay capped at
-    ``_RECONNECT_MAX_DELAY`` seconds.
-    """
     last_exc = None
     for attempt in range(1 + _MAX_RECONNECT_ATTEMPTS):
         try:
-            pool = _create_pool()
-            return pool.acquire()
+            conn = oracledb.connect(**kwargs)
+            logger.debug("Opened connection to %s", _dsn_label())
+            return conn
         except oracledb.Error as exc:
             if not _is_connection_closed_error(exc):
                 logger.exception(
-                    "Failed to acquire connection from pool for %s", _dsn_label()
+                    "Failed to connect to %s", _dsn_label()
                 )
                 raise
             last_exc = exc
             if attempt < _MAX_RECONNECT_ATTEMPTS:
-                delay = min(
-                    _RECONNECT_BASE_DELAY * (2 ** attempt),
-                    _RECONNECT_MAX_DELAY,
-                )
+                delay = _RECONNECT_BASE_DELAY * (attempt + 1)
                 logger.warning(
-                    "Stale pool detected (DPY-4011), resetting and retrying "
+                    "Connection failed (DPY-4011), retrying "
                     "(attempt %d/%d, backoff %ds)",
                     attempt + 1, _MAX_RECONNECT_ATTEMPTS, delay,
                 )
-                _reset_pool()
                 time.sleep(delay)
             else:
                 logger.error(
@@ -158,10 +115,10 @@ def _run_query(conn, query, params):
 
 
 def execute_query(query, params=None):
-    """Execute a query and return all rows as a list of dicts.
+    """Execute a query using a fresh connection that is closed afterwards.
 
-    On a closed-connection error (DPY-4011) the pool is reset and the
-    query is retried once with a fresh connection.
+    On a closed-connection error (DPY-4011) the query is retried once
+    with a new connection.
     """
     conn = None
     try:
@@ -170,7 +127,12 @@ def execute_query(query, params=None):
     except oracledb.Error as exc:
         if _is_connection_closed_error(exc):
             logger.warning("Connection lost during query (DPY-4011), retrying once")
-            _reset_pool()
+            if conn is not None:
+                try:
+                    conn.close()
+                except oracledb.Error:
+                    pass
+                conn = None
             retry_conn = None
             try:
                 retry_conn = get_connection()
@@ -193,8 +155,8 @@ def test_connection():
     """Verify connectivity by executing ``SELECT 1 FROM DUAL``.
 
     Returns ``True`` on success; raises on failure.
-    If a DPY-4011 error occurs during the query the pool is reset and a
-    single retry is made with a fresh connection.
+    If a DPY-4011 error occurs during the query a single retry is made
+    with a new connection.
     """
     conn = None
     try:
@@ -213,7 +175,6 @@ def test_connection():
             except oracledb.Error:
                 pass
             conn = None
-        _reset_pool()
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1 FROM DUAL")
@@ -222,15 +183,3 @@ def test_connection():
     finally:
         if conn is not None:
             conn.close()
-
-
-def close_pool():
-    """Shut down the connection pool (if any)."""
-    global _pool
-    if _pool is not None:
-        try:
-            _pool.close(force=True)
-        except oracledb.Error:
-            logger.exception("Error closing connection pool")
-        finally:
-            _pool = None

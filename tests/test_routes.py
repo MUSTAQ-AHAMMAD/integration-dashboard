@@ -221,6 +221,14 @@ def test_dashboard_contains_current_year(client):
     assert current_year in html
 
 
+def test_dashboard_contains_refresh_button(client):
+    """The dashboard should have a refresh button."""
+    resp = client.get("/")
+    html = resp.data.decode()
+    assert 'id="refresh-btn"' in html
+    assert "Refresh" in html
+
+
 # ── Database configuration ────────────────────────────────────────────
 def test_db_config_includes_mode(app):
     """The app config should include DB_MODE for SYSDBA support."""

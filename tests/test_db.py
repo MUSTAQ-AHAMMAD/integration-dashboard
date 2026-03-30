@@ -31,10 +31,8 @@ def _make_app(**overrides):
 def _reset_db_state():
     """Ensure each test starts with a clean DB module state."""
     db_module._app_config = None
-    db_module._pool = None
     yield
     db_module._app_config = None
-    db_module._pool = None
 
 
 # ── init_db ────────────────────────────────────────────────────────────
@@ -61,24 +59,6 @@ def test_init_db_stores_sysdba_mode():
     assert db_module._app_config["mode"] == "SYSDBA"
 
 
-def test_init_db_resets_pool():
-    """Calling init_db again should close and reset any existing pool."""
-    mock_pool = MagicMock()
-    db_module._pool = mock_pool
-    _make_app()
-    mock_pool.close.assert_called_once_with(force=True)
-    assert db_module._pool is None
-
-
-def test_init_db_ignores_pool_close_error():
-    """init_db should not raise if closing the old pool fails."""
-    mock_pool = MagicMock()
-    mock_pool.close.side_effect = oracledb.Error("close failed")
-    db_module._pool = mock_pool
-    _make_app()  # should not raise
-    assert db_module._pool is None
-
-
 # ── _dsn / _dsn_label ─────────────────────────────────────────────────
 def test_dsn_format():
     """_dsn should return an Easy Connect string."""
@@ -100,91 +80,120 @@ def test_dsn_label_before_init():
     assert db_module._dsn_label() == "<not configured>"
 
 
-# ── _create_pool ───────────────────────────────────────────────────────
-def test_create_pool_raises_if_not_initialised():
-    """_create_pool should raise RuntimeError when init_db was never called."""
+# ── get_connection ─────────────────────────────────────────────────────
+def test_get_connection_raises_if_not_initialised():
+    """get_connection should raise RuntimeError when init_db was never called."""
     with pytest.raises(RuntimeError, match="Database not initialised"):
-        db_module._create_pool()
+        db_module.get_connection()
 
 
-@patch("app.db.oracledb.create_pool")
-def test_create_pool_uses_dsn(mock_create, ):
-    """_create_pool should pass the Easy Connect DSN to oracledb.create_pool."""
+@patch("app.db.oracledb.connect")
+def test_get_connection_creates_standalone_connection(mock_connect):
+    """get_connection should call oracledb.connect with the correct DSN."""
     _make_app()
-    db_module._pool = None  # force pool creation
-    db_module._create_pool()
-    mock_create.assert_called_once()
-    kwargs = mock_create.call_args[1]
+    conn = db_module.get_connection()
+    mock_connect.assert_called_once()
+    kwargs = mock_connect.call_args[1]
     assert kwargs["dsn"] == "dbhost.example.com:1521/TESTDB"
     assert kwargs["user"] == "app_user"
     assert kwargs["password"] == "secret"
-    assert kwargs["min"] == 1
-    assert kwargs["max"] == 5
-    assert kwargs["timeout"] == 300
+    assert conn is mock_connect.return_value
 
 
-@patch("app.db.oracledb.create_pool")
-def test_create_pool_sets_sysdba_mode(mock_create):
-    """_create_pool should pass AUTH_MODE_SYSDBA when DB_MODE=SYSDBA."""
+@patch("app.db.oracledb.connect")
+def test_get_connection_sets_sysdba_mode(mock_connect):
+    """get_connection should pass AUTH_MODE_SYSDBA when DB_MODE=SYSDBA."""
     _make_app(DB_MODE="SYSDBA")
-    db_module._pool = None
-    db_module._create_pool()
-    kwargs = mock_create.call_args[1]
+    db_module.get_connection()
+    kwargs = mock_connect.call_args[1]
     assert kwargs["mode"] == oracledb.AUTH_MODE_SYSDBA
 
 
-@patch("app.db.oracledb.create_pool")
-def test_create_pool_omits_mode_when_not_sysdba(mock_create):
-    """_create_pool should not pass mode when DB_MODE is empty."""
+@patch("app.db.oracledb.connect")
+def test_get_connection_omits_mode_when_not_sysdba(mock_connect):
+    """get_connection should not pass mode when DB_MODE is empty."""
     _make_app(DB_MODE="")
-    db_module._pool = None
-    db_module._create_pool()
-    kwargs = mock_create.call_args[1]
+    db_module.get_connection()
+    kwargs = mock_connect.call_args[1]
     assert "mode" not in kwargs
 
 
-@patch("app.db.oracledb.create_pool")
-def test_create_pool_returns_existing(mock_create):
-    """_create_pool should return the existing pool without creating a new one."""
+@patch("app.db.oracledb.connect", side_effect=oracledb.Error("connection refused"))
+def test_get_connection_raises_on_failure(mock_connect):
+    """get_connection should raise when oracledb.connect fails."""
     _make_app()
-    sentinel = MagicMock()
-    db_module._pool = sentinel
-    result = db_module._create_pool()
-    assert result is sentinel
-    mock_create.assert_not_called()
-
-
-@patch("app.db.oracledb.create_pool", side_effect=oracledb.Error("cannot connect"))
-def test_create_pool_propagates_error(mock_create):
-    """_create_pool should re-raise oracledb.Error and leave _pool as None."""
-    _make_app()
-    db_module._pool = None
-    with pytest.raises(oracledb.Error, match="cannot connect"):
-        db_module._create_pool()
-    assert db_module._pool is None
-
-
-# ── get_connection ─────────────────────────────────────────────────────
-@patch("app.db._create_pool")
-def test_get_connection_acquires_from_pool(mock_pool_fn):
-    """get_connection should acquire a connection from the pool."""
-    _make_app()
-    mock_pool = MagicMock()
-    mock_pool_fn.return_value = mock_pool
-    conn = db_module.get_connection()
-    mock_pool.acquire.assert_called_once()
-    assert conn is mock_pool.acquire.return_value
-
-
-@patch("app.db._create_pool")
-def test_get_connection_raises_on_acquire_failure(mock_pool_fn):
-    """get_connection should raise when pool.acquire fails."""
-    _make_app()
-    mock_pool = MagicMock()
-    mock_pool.acquire.side_effect = oracledb.Error("pool exhausted")
-    mock_pool_fn.return_value = mock_pool
-    with pytest.raises(oracledb.Error, match="pool exhausted"):
+    with pytest.raises(oracledb.Error, match="connection refused"):
         db_module.get_connection()
+
+
+@patch("app.db.time.sleep")
+@patch("app.db.oracledb.connect")
+def test_get_connection_retries_on_dpy4011(mock_connect, mock_sleep):
+    """get_connection should retry on DPY-4011."""
+    _make_app()
+    dpy_err = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    good_conn = MagicMock()
+    mock_connect.side_effect = [dpy_err, good_conn]
+
+    conn = db_module.get_connection()
+    assert conn is good_conn
+    assert mock_connect.call_count == 2
+    mock_sleep.assert_called_once_with(1)  # first retry: delay = 1 * (0+1) = 1
+
+
+@patch("app.db.time.sleep")
+@patch("app.db.oracledb.connect")
+def test_get_connection_retries_multiple_times_on_dpy4011(mock_connect, mock_sleep):
+    """get_connection should retry up to _MAX_RECONNECT_ATTEMPTS times."""
+    _make_app()
+    dpy_err = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    good_conn = MagicMock()
+    mock_connect.side_effect = [dpy_err, dpy_err, good_conn]
+
+    conn = db_module.get_connection()
+    assert conn is good_conn
+    assert mock_connect.call_count == 3
+    # Linear backoff: attempt 0 → sleep(1), attempt 1 → sleep(2)
+    assert mock_sleep.call_args_list == [call(1), call(2)]
+
+
+@patch("app.db.time.sleep")
+@patch("app.db.oracledb.connect")
+def test_get_connection_raises_after_all_retries_exhausted(mock_connect, mock_sleep):
+    """get_connection should raise DPY-4011 after all retries are exhausted."""
+    _make_app()
+    dpy_err = oracledb.Error(
+        "DPY-4011: the database or network closed the connection"
+    )
+    mock_connect.side_effect = dpy_err
+
+    with pytest.raises(oracledb.Error, match="DPY-4011"):
+        db_module.get_connection()
+    # 1 initial + _MAX_RECONNECT_ATTEMPTS retries
+    assert mock_connect.call_count == 1 + db_module._MAX_RECONNECT_ATTEMPTS
+    assert mock_sleep.call_count == db_module._MAX_RECONNECT_ATTEMPTS
+    # Linear backoff: 1, 2, 3
+    expected = [
+        call(db_module._RECONNECT_BASE_DELAY * (i + 1))
+        for i in range(db_module._MAX_RECONNECT_ATTEMPTS)
+    ]
+    assert mock_sleep.call_args_list == expected
+
+
+@patch("app.db.oracledb.connect")
+def test_get_connection_raises_non_dpy4011_error(mock_connect):
+    """get_connection should propagate non-DPY-4011 errors without retry."""
+    _make_app()
+    mock_connect.side_effect = oracledb.Error("ORA-12541: TNS:no listener")
+
+    with pytest.raises(oracledb.Error, match="ORA-12541"):
+        db_module.get_connection()
+    # Only one attempt – no retry for non-DPY-4011 errors
+    assert mock_connect.call_count == 1
 
 
 # ── execute_query ──────────────────────────────────────────────────────
@@ -263,9 +272,8 @@ def test_test_connection_failure(mock_conn_fn):
         db_module.test_connection()
 
 
-@patch("app.db._reset_pool")
 @patch("app.db.get_connection")
-def test_test_connection_retries_on_dpy4011(mock_conn_fn, mock_reset):
+def test_test_connection_retries_on_dpy4011(mock_conn_fn):
     """test_connection should retry once when the query raises DPY-4011."""
     # First connection: cursor.execute raises DPY-4011
     bad_cursor = MagicMock()
@@ -284,7 +292,6 @@ def test_test_connection_retries_on_dpy4011(mock_conn_fn, mock_reset):
     mock_conn_fn.side_effect = [bad_conn, good_conn]
 
     assert db_module.test_connection() is True
-    mock_reset.assert_called_once()
     bad_conn.close.assert_called_once()
     good_conn.close.assert_called_once()
 
@@ -303,32 +310,6 @@ def test_test_connection_no_retry_on_other_errors(mock_conn_fn):
     assert mock_conn_fn.call_count == 1
 
 
-# ── close_pool ─────────────────────────────────────────────────────────
-def test_close_pool_closes_and_resets():
-    """close_pool should close the pool and reset _pool to None."""
-    mock_pool = MagicMock()
-    db_module._pool = mock_pool
-    db_module.close_pool()
-    mock_pool.close.assert_called_once_with(force=True)
-    assert db_module._pool is None
-
-
-def test_close_pool_noop_when_no_pool():
-    """close_pool should be a no-op when there is no pool."""
-    db_module._pool = None
-    db_module.close_pool()  # should not raise
-    assert db_module._pool is None
-
-
-def test_close_pool_resets_even_on_error():
-    """close_pool should reset _pool to None even if pool.close raises."""
-    mock_pool = MagicMock()
-    mock_pool.close.side_effect = oracledb.Error("close failed")
-    db_module._pool = mock_pool
-    db_module.close_pool()  # should not raise
-    assert db_module._pool is None
-
-
 # ── _is_connection_closed_error ────────────────────────────────────────
 def test_is_connection_closed_error_detects_dpy4011():
     """_is_connection_closed_error should return True for DPY-4011 messages."""
@@ -340,117 +321,6 @@ def test_is_connection_closed_error_ignores_other_errors():
     """_is_connection_closed_error should return False for non-DPY-4011 errors."""
     exc = oracledb.Error("ORA-00942: table or view does not exist")
     assert db_module._is_connection_closed_error(exc) is False
-
-
-# ── _reset_pool ────────────────────────────────────────────────────────
-def test_reset_pool_destroys_and_clears():
-    """_reset_pool should close the pool and set _pool to None."""
-    _make_app()
-    mock_pool = MagicMock()
-    db_module._pool = mock_pool
-    db_module._reset_pool()
-    mock_pool.close.assert_called_once_with(force=True)
-    assert db_module._pool is None
-
-
-def test_reset_pool_noop_when_no_pool():
-    """_reset_pool should be a no-op when there is no pool."""
-    _make_app()
-    db_module._pool = None
-    db_module._reset_pool()  # should not raise
-    assert db_module._pool is None
-
-
-# ── _create_pool (ping_interval) ──────────────────────────────────────
-@patch("app.db.oracledb.create_pool")
-def test_create_pool_sets_ping_interval(mock_create):
-    """_create_pool should set ping_interval=0 to detect stale connections."""
-    _make_app()
-    db_module._pool = None
-    db_module._create_pool()
-    kwargs = mock_create.call_args[1]
-    assert kwargs["ping_interval"] == 0
-
-
-# ── get_connection retry on DPY-4011 ──────────────────────────────────
-@patch("app.db.time.sleep")
-@patch("app.db._create_pool")
-def test_get_connection_retries_on_dpy4011(mock_pool_fn, mock_sleep):
-    """get_connection should reset the pool and retry on DPY-4011."""
-    _make_app()
-    bad_pool = MagicMock()
-    good_pool = MagicMock()
-    bad_pool.acquire.side_effect = oracledb.Error(
-        "DPY-4011: the database or network closed the connection"
-    )
-    # First call returns bad pool, second call (after reset) returns good pool
-    mock_pool_fn.side_effect = [bad_pool, good_pool]
-
-    conn = db_module.get_connection()
-    assert conn is good_pool.acquire.return_value
-    assert mock_pool_fn.call_count == 2
-    mock_sleep.assert_called_once_with(2)  # first retry: delay = min(2 * 2^0, 32) = 2
-
-
-@patch("app.db.time.sleep")
-@patch("app.db._create_pool")
-def test_get_connection_retries_multiple_times_on_dpy4011(mock_pool_fn, mock_sleep):
-    """get_connection should retry up to _MAX_RECONNECT_ATTEMPTS times."""
-    _make_app()
-    bad_pool1 = MagicMock()
-    bad_pool2 = MagicMock()
-    good_pool = MagicMock()
-    dpy_err = oracledb.Error(
-        "DPY-4011: the database or network closed the connection"
-    )
-    bad_pool1.acquire.side_effect = dpy_err
-    bad_pool2.acquire.side_effect = dpy_err
-    mock_pool_fn.side_effect = [bad_pool1, bad_pool2, good_pool]
-
-    conn = db_module.get_connection()
-    assert conn is good_pool.acquire.return_value
-    assert mock_pool_fn.call_count == 3
-    # Exponential backoff: attempt 0 → sleep(2), attempt 1 → sleep(4)
-    assert mock_sleep.call_args_list == [call(2), call(4)]
-
-
-@patch("app.db.time.sleep")
-@patch("app.db._create_pool")
-def test_get_connection_raises_after_all_retries_exhausted(mock_pool_fn, mock_sleep):
-    """get_connection should raise DPY-4011 after all retries are exhausted."""
-    _make_app()
-    dpy_err = oracledb.Error(
-        "DPY-4011: the database or network closed the connection"
-    )
-    bad_pool = MagicMock()
-    bad_pool.acquire.side_effect = dpy_err
-    mock_pool_fn.return_value = bad_pool
-
-    with pytest.raises(oracledb.Error, match="DPY-4011"):
-        db_module.get_connection()
-    # 1 initial + _MAX_RECONNECT_ATTEMPTS retries
-    assert mock_pool_fn.call_count == 1 + db_module._MAX_RECONNECT_ATTEMPTS
-    assert mock_sleep.call_count == db_module._MAX_RECONNECT_ATTEMPTS
-    # Exponential backoff: 2, 4, 8, 16, 32 (capped at _RECONNECT_MAX_DELAY)
-    expected = [
-        call(min(db_module._RECONNECT_BASE_DELAY * (2 ** i), db_module._RECONNECT_MAX_DELAY))
-        for i in range(db_module._MAX_RECONNECT_ATTEMPTS)
-    ]
-    assert mock_sleep.call_args_list == expected
-
-
-@patch("app.db._create_pool")
-def test_get_connection_raises_non_dpy4011_error(mock_pool_fn):
-    """get_connection should propagate non-DPY-4011 errors without retry."""
-    _make_app()
-    mock_pool = MagicMock()
-    mock_pool.acquire.side_effect = oracledb.Error("ORA-12541: TNS:no listener")
-    mock_pool_fn.return_value = mock_pool
-
-    with pytest.raises(oracledb.Error, match="ORA-12541"):
-        db_module.get_connection()
-    # Only one attempt – no retry for non-DPY-4011 errors
-    assert mock_pool_fn.call_count == 1
 
 
 # ── execute_query retry on DPY-4011 ───────────────────────────────────
@@ -474,11 +344,9 @@ def test_execute_query_retries_on_dpy4011(mock_conn_fn):
 
     mock_conn_fn.side_effect = [bad_conn, good_conn]
 
-    with patch("app.db._reset_pool") as mock_reset:
-        rows = db_module.execute_query("SELECT id, name FROM users")
+    rows = db_module.execute_query("SELECT id, name FROM users")
 
     assert rows == [{"id": 1, "name": "Alice"}]
-    mock_reset.assert_called_once()
     bad_conn.close.assert_called_once()
     good_conn.close.assert_called_once()
 
@@ -500,9 +368,8 @@ def test_execute_query_raises_on_retry_failure(mock_conn_fn):
 
     mock_conn_fn.side_effect = [bad_conn1, bad_conn2]
 
-    with patch("app.db._reset_pool"):
-        with pytest.raises(oracledb.Error, match="ORA-01034"):
-            db_module.execute_query("SELECT 1 FROM DUAL")
+    with pytest.raises(oracledb.Error, match="ORA-01034"):
+        db_module.execute_query("SELECT 1 FROM DUAL")
 
 
 @patch("app.db.get_connection")

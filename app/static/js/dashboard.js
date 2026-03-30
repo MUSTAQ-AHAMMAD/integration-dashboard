@@ -3,8 +3,6 @@
    ══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
-const REFRESH_MS = (window.REFRESH_INTERVAL || 30) * 1000;
-
 /* Chart instances (created once, updated on each refresh) */
 let pieChart = null;
 let barChart = null;
@@ -515,7 +513,13 @@ function hideConnectionBanner() {
 
 /* ── Orchestrator ────────────────────────────────────────────────── */
 async function refreshAll() {
+  var btn = document.getElementById("refresh-btn");
+  var icon = document.getElementById("refresh-icon");
   var el = document.getElementById("last-updated");
+
+  /* Disable button and show spinner while refreshing */
+  if (btn) btn.disabled = true;
+  if (icon) icon.classList.add("spin");
   el.textContent = "Refreshing\u2026";
   el.classList.add("refreshing");
 
@@ -549,16 +553,27 @@ async function refreshAll() {
   el.textContent = "Last updated: " + new Date().toLocaleTimeString();
   el.classList.remove("refreshing");
 
+  /* Re-enable button and stop spinner */
+  if (btn) btn.disabled = false;
+  if (icon) icon.classList.remove("spin");
+
   if (!isFirstLoad && dbOk) {
     showToast("Dashboard data refreshed", "success");
   }
   isFirstLoad = false;
 }
 
-/* Run on load, then auto-refresh */
+/* Run on load; subsequent refreshes are triggered by the Refresh button */
 document.addEventListener("DOMContentLoaded", function() {
   refreshAll();
-  setInterval(refreshAll, REFRESH_MS);
+
+  /* Refresh button click handler */
+  var refreshBtn = document.getElementById("refresh-btn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", function() {
+      refreshAll();
+    });
+  }
 
   /* Search / filter input handler */
   var searchInput = document.getElementById("status-search");
